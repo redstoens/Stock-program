@@ -66,6 +66,14 @@
     .badge-risk-mid { background: #fffbeb; color: #744210; }
     .badge-risk-hi  { background: #fff5f5; color: #c53030; }
 
+    /* 즐겨찾기 */
+    .fav-btn { background: none; border: none; font-size: 1.3rem; cursor: pointer; color: #cbd5e0; line-height: 1; padding: 0.1rem 0.15rem; transition: color 0.15s, transform 0.15s; flex-shrink: 0; }
+    .fav-btn:hover { color: #f6ad55; transform: scale(1.2); }
+    .fav-btn.fav-on { color: #f6ad55; }
+    .stock-card.fav-card { border-left-color: #f6ad55; }
+    .fav-empty { text-align: center; color: #a0aec0; padding: 3rem 1rem; font-size: 0.95rem; line-height: 2; }
+    #fav-count { font-size: 0.8em; opacity: 0.85; }
+
     /* 매도·매수 신호 배지 */
     .badge-signal { font-weight: 700; }
     .sig-sell     { background: #fff5f5; color: #c53030; border: 1.5px solid #feb2b2; animation: sig-pulse 1.8s ease-in-out infinite; }
@@ -274,7 +282,10 @@
     <button class="tab-btn active" id="tab-kr" onclick="switchMarket('kr')">🇰🇷 국내주 (KOSPI)</button>
     <button class="tab-btn" id="tab-us" onclick="switchMarket('us')">🇺🇸 미국주 (S&P 500)</button>
     <button class="tab-btn" id="tab-verify" onclick="switchMarket('verify')">📊 투자 검증</button>
+    <button class="tab-btn" id="tab-fav" onclick="switchMarket('fav')">⭐ 관심종목 <span id="fav-count"></span></button>
   </div>
+
+  <div id="fav-section" style="display:none"></div>
 
   <div id="verify-section">
     <div class="verify-market-tabs">
@@ -352,6 +363,8 @@
   let currentMarket = 'kr';
   let currentVerifyMarket = 'kr';
   let verifyRecords = [];
+  let favs = new Set(JSON.parse(localStorage.getItem('stock-favs') || '[]'));
+  let cachedStocks = { kr: [], us: [] };
 
   const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
   const RISK_LABEL = { '하': '🟢 리스크 낮음', '중': '🟡 리스크 보통', '상': '🔴 리스크 높음' };
@@ -360,14 +373,17 @@
   function switchMarket(market) {
     currentMarket = market;
     const isVerify = market === 'verify';
+    const isFav    = market === 'fav';
     document.getElementById('tab-kr').classList.toggle('active', market === 'kr');
     document.getElementById('tab-us').classList.toggle('active', market === 'us');
     document.getElementById('tab-verify').classList.toggle('active', isVerify);
-    document.getElementById('memo-card').style.display    = isVerify ? 'none' : '';
-    document.getElementById('btn-analyze').style.display  = isVerify ? 'none' : '';
+    document.getElementById('tab-fav').classList.toggle('active', isFav);
+    document.getElementById('memo-card').style.display    = (isVerify || isFav) ? 'none' : '';
+    document.getElementById('btn-analyze').style.display  = (isVerify || isFav) ? 'none' : '';
     document.getElementById('cached-bar').style.display   = 'none';
     document.getElementById('result-section').style.display = 'none';
     document.getElementById('verify-section').style.display = isVerify ? 'block' : 'none';
+    document.getElementById('fav-section').style.display    = isFav    ? 'block' : 'none';
     document.getElementById('short-section').innerHTML   = '';
     document.getElementById('long-section').innerHTML    = '';
     document.getElementById('history-section').innerHTML = '';
@@ -377,6 +393,8 @@
       document.getElementById('vmt-kr').classList.add('active');
       document.getElementById('vmt-us').classList.remove('active');
       loadVerifyData();
+    } else if (isFav) {
+      renderFavSection();
     } else {
       const placeholders = {
         kr: '예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주',
@@ -597,6 +615,7 @@
       if (!data.success || !data.stocks) return;
 
       reportMarkdown = data.report;
+      cachedStocks[currentMarket] = data.stocks;
       renderHistory(data.overlaps, data.prev_date);
       renderStocks(data.stocks, '단기', 'short-section', currentMarket);
       renderStocks(data.stocks, '중장기', 'long-section', currentMarket);
@@ -633,6 +652,7 @@
       if (!data.success) throw new Error(data.error || '알 수 없는 오류');
 
       reportMarkdown = data.report;
+      cachedStocks[currentMarket] = data.stocks;
       renderHistory(data.overlaps, data.prev_date);
       renderStocks(data.stocks, '단기', 'short-section', currentMarket);
       renderStocks(data.stocks, '중장기', 'long-section', currentMarket);
@@ -680,12 +700,12 @@
 
   function renderStocks(stocks, horizon, containerId, market) {
     const container = document.getElementById(containerId);
-    const filtered = stocks.filter(s => (s.investment_horizon || '중장기') === horizon);
+    const filtered = horizon === '모두' ? stocks : stocks.filter(s => (s.investment_horizon || '중장기') === horizon);
 
     if (filtered.length === 0) { container.innerHTML = ''; return; }
 
     const isShort = horizon === '단기';
-    container.innerHTML = `
+    container.innerHTML = horizon === '모두' ? '' : `
       <div class="section-header">
         <span class="sh-badge ${isShort ? 'sh-short' : 'sh-long'}">
           ${isShort ? '⚡ 단기 투자' : '📦 중장기 투자'}
@@ -739,8 +759,10 @@
         }
       } catch(e) {}
 
+      const favKey = `${market}:${s.code}`;
+      const isFaved = favs.has(favKey);
       container.innerHTML += `
-        <div class="stock-card ${isShort ? 'short' : 'long'}">
+        <div class="stock-card ${isShort ? 'short' : 'long'}${isFaved ? ' fav-card' : ''}">
           <div class="stock-header">
             <div class="stock-header-left">
               <div class="stock-num">${i + 1}</div>
@@ -749,7 +771,10 @@
                 <span class="stock-code">(${s.code})</span>
               </div>
             </div>
-            ${scoreBadge}
+            <div style="display:flex;align-items:center;gap:0.35rem">
+              ${scoreBadge}
+              <button class="fav-btn${isFaved ? ' fav-on' : ''}" data-fav-key="${favKey}" onclick="toggleFav('${favKey}')" title="관심종목 추가/제거">${isFaved ? '★' : '☆'}</button>
+            </div>
           </div>
 
           <div class="badge-row">
@@ -962,7 +987,48 @@
     });
   }
 
-  window.addEventListener('load', loadCachedData);
+  window.addEventListener('load', () => { loadCachedData(); updateFavTab(); });
+
+  // ── 즐겨찾기 ──────────────────────────────────────────────────
+  function updateFavTab() {
+    const el = document.getElementById('fav-count');
+    el.textContent = favs.size > 0 ? `(${favs.size})` : '';
+  }
+
+  function toggleFav(key) {
+    if (favs.has(key)) favs.delete(key);
+    else favs.add(key);
+    localStorage.setItem('stock-favs', JSON.stringify([...favs]));
+    updateFavTab();
+    document.querySelectorAll(`[data-fav-key="${key}"]`).forEach(btn => {
+      const on = favs.has(key);
+      btn.textContent = on ? '★' : '☆';
+      btn.classList.toggle('fav-on', on);
+      const card = btn.closest('.stock-card');
+      if (card) card.classList.toggle('fav-card', on);
+    });
+    if (currentMarket === 'fav') renderFavSection();
+  }
+
+  function renderFavSection() {
+    const sec = document.getElementById('fav-section');
+    if (favs.size === 0) {
+      sec.innerHTML = '<div class="fav-empty">아직 즐겨찾기한 종목이 없습니다.<br/>카드의 ☆ 버튼을 눌러 추가하세요.</div>';
+      return;
+    }
+    const krFavs = cachedStocks.kr.filter(s => favs.has(`kr:${s.code}`));
+    const usFavs = cachedStocks.us.filter(s => favs.has(`us:${s.code}`));
+    if (krFavs.length === 0 && usFavs.length === 0) {
+      sec.innerHTML = '<div class="fav-empty">국내/미국주 탭을 먼저 열면<br/>즐겨찾기한 종목 카드가 여기에 표시됩니다.</div>';
+      return;
+    }
+    sec.innerHTML = `
+      ${krFavs.length ? '<div class="section-header"><span>🇰🇷 국내주 관심종목</span></div><div id="fav-kr-cont"></div>' : ''}
+      ${usFavs.length ? '<div class="section-header"><span>🇺🇸 미국주 관심종목</span></div><div id="fav-us-cont"></div>' : ''}
+    `;
+    if (krFavs.length) renderStocks(krFavs, '모두', 'fav-kr-cont', 'kr');
+    if (usFavs.length) renderStocks(usFavs, '모두', 'fav-us-cont', 'us');
+  }
 
   function downloadReport() {
     if (!reportMarkdown) return;
