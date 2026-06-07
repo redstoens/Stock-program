@@ -1,6 +1,7 @@
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__))
+LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
+sys.path.insert(0, os.path.abspath(LIB_DIR))
 
 from flask import Flask, request, jsonify, send_from_directory
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
