@@ -1,5 +1,19 @@
+import io
+import json
+import os
+import zipfile
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+
+import requests
 import yfinance as yf
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DART_KEY = os.getenv("DART_API_KEY", "")
+_CORP_MAP_CACHE = "/tmp/dart_corp_map.json"
+_CORP_MAP: dict[str, str] | None = None
 
 # KOSPI 주요 종목 (시가총액 상위, .KS = KOSPI)
 KOSPI_TICKERS = [
@@ -66,6 +80,84 @@ KOSPI_TICKERS = [
 ]
 
 
+# ── DART 공통 유틸 ──────────────────────────────────────────────
+
+def _get_corp_map() -> dict[str, str]:
+    """stock_code → corp_code 매핑. /tmp 캐시 → 메모리 캐시 순으로 활용."""
+    global _CORP_MAP
+    if _CORP_MAP is not None:
+        return _CORP_MAP
+
+    # /tmp 캐시 확인 (Vercel warm instance 재활용)
+    try:
+        with open(_CORP_MAP_CACHE) as f:
+            _CORP_MAP = json.load(f)
+            return _CORP_MAP
+    except Exception:
+        pass
+
+    # DART에서 직접 다운로드
+    try:
+        r = requests.get(
+            f"https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key={DART_KEY}",
+            timeout=30,
+        )
+        zf = zipfile.ZipFile(io.BytesIO(r.content))
+        root = ET.fromstring(zf.read("CORPCODE.xml"))
+        mapping = {
+            item.findtext("stock_code", "").strip(): item.findtext("corp_code", "").strip()
+            for item in root.findall("list")
+            if item.findtext("stock_code", "").strip()
+        }
+        _CORP_MAP = mapping
+        try:
+            with open(_CORP_MAP_CACHE, "w") as f:
+                json.dump(_CORP_MAP, f)
+        except Exception:
+            pass
+    except Exception:
+        _CORP_MAP = {}
+
+    return _CORP_MAP
+
+
+def _fetch_dart_roe(stock_code: str) -> str:
+    """DART 공식 재무제표에서 ROE(자기자본이익률) 조회."""
+    if not DART_KEY:
+        return "N/A"
+    corp_map = _get_corp_map()
+    corp_code = corp_map.get(stock_code)
+    if not corp_code:
+        return "N/A"
+
+    for year in ("2024", "2023"):
+        try:
+            r = requests.get(
+                "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
+                params={
+                    "crtfc_key": DART_KEY,
+                    "corp_code": corp_code,
+                    "bsns_year": year,
+                    "reprt_code": "11011",   # 사업보고서
+                    "idx_cl_code": "M210000",  # 수익성 지표
+                },
+                timeout=10,
+            )
+            data = r.json()
+            if data.get("status") != "000":
+                continue
+            for item in data.get("list", []):
+                nm = item.get("idx_nm", "")
+                if "자기자본이익률" in nm or "ROE" in nm.upper():
+                    val = item.get("idx_val", "").replace(",", "")
+                    return str(round(float(val), 1))
+        except Exception:
+            continue
+    return "N/A"
+
+
+# ── yfinance 수집 ────────────────────────────────────────────────
+
 def _fetch_one(ticker_sym: str) -> dict | None:
     try:
         info = yf.Ticker(ticker_sym).info
@@ -84,8 +176,6 @@ def _fetch_one(ticker_sym: str) -> dict | None:
         w52_low = info.get("fiftyTwoWeekLow") or 0
 
         mktcap_억 = market_cap // 100_000_000
-        per = str(round(per_val, 1)) if per_val > 0 else "N/A"
-        roe = str(round(roe_raw * 100, 1)) if roe_raw else "N/A"
         pct_from_high = round((cur_price - w52_high) / w52_high * 100, 1) if w52_high > 0 else 0
 
         return {
@@ -95,8 +185,8 @@ def _fetch_one(ticker_sym: str) -> dict | None:
             "change_rate": f"{change_pct:+.2f}%" if change_pct else "",
             "market_cap": f"{mktcap_억:,}",
             "market_cap_raw": market_cap,
-            "per": per,
-            "roe": roe,
+            "per": str(round(per_val, 1)) if per_val > 0 else "N/A",
+            "roe": str(round(roe_raw * 100, 1)) if roe_raw else "N/A",
             "current_price_raw": int(cur_price),
             "week52_high": f"{int(w52_high):,}" if w52_high else "N/A",
             "week52_low": f"{int(w52_low):,}" if w52_low else "N/A",
@@ -107,7 +197,7 @@ def _fetch_one(ticker_sym: str) -> dict | None:
 
 
 def fetch_kospi_stocks(top_n: int = 80) -> list[dict]:
-    """KOSPI 주요 종목 데이터 — yfinance (글로벌 IP 접근 가능)."""
+    """KOSPI 주요 종목 — yfinance (AI 분석용 초기 데이터)."""
     with ThreadPoolExecutor(max_workers=8) as executor:
         results = list(executor.map(_fetch_one, KOSPI_TICKERS))
 
@@ -118,12 +208,11 @@ def fetch_kospi_stocks(top_n: int = 80) -> list[dict]:
     stocks.sort(key=lambda x: x["market_cap_raw"], reverse=True)
     for i, s in enumerate(stocks[:top_n], start=1):
         s["rank"] = i
-
     return stocks[:top_n]
 
 
 def fetch_stock_detail(code: str) -> dict:
-    """개별 종목 52주 고저가 — yfinance."""
+    """AI 선택 종목 상세 — 52주 고저가(yfinance) + ROE(DART 공식)."""
     detail = {
         "current_price_raw": 0,
         "week52_high": "N/A",
@@ -146,6 +235,12 @@ def fetch_stock_detail(code: str) -> dict:
             })
     except Exception:
         pass
+
+    # ROE를 DART 공식 데이터로 교체
+    dart_roe = _fetch_dart_roe(code)
+    if dart_roe != "N/A":
+        detail["roe"] = dart_roe
+
     return detail
 
 
