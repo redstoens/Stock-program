@@ -89,6 +89,7 @@ def _fetch_dart_all(stock_code: str, corp_map: dict) -> tuple[dict, dict]:
             )
             data = r.json()
             if data.get("status") != "000":
+                print(f"      DART {year} M210000 status={data.get('status')} msg={data.get('message','')}")
                 continue
             roe, om = None, None
             for item in data.get("list", []):
@@ -530,10 +531,8 @@ def _refine_with_context(analyzed: list[dict],
 위 실제 데이터를 반영해 각 종목의 분석을 보강하세요:
 1. news_summary → 실제 뉴스 헤드라인을 반영해 업데이트 (1-2문장)
 2. reason → 3년 재무 트렌드 + 기술적 지표(RSI·MA·MACD 신호) 반영해 보강
-3. trend_summary → "YYYY→YYYY→YYYY 영업이익률/ROE 흐름" 한 줄 요약 (신규 필드)
-4. earnings_trend → 실제 3년 데이터 기반으로 재평가
 
-future_target, stop_loss, investment_horizon, rsi, ma_signal, macd_signal 등 나머지 필드는 그대로 유지하세요.
+trend_summary, earnings_trend, future_target, stop_loss, investment_horizon, roe, operating_margin, debt_ratio, rsi, ma_signal, macd_signal 등 나머지 필드는 모두 기존 값을 그대로 유지하세요.
 
 JSON만 반환하세요 (다른 텍스트 없이):
 {{"stocks": [보강된 10개 종목]}}"""
@@ -551,6 +550,22 @@ JSON만 반환하세요 (다른 텍스트 없이):
         refined = json.loads(response.text)
         stocks = refined.get("stocks", [])
         if stocks:
+            # Gemini가 덮어쓰면 안 되는 필드 원본값으로 복원
+            _PRESERVE = {
+                "earnings_trend", "trend_summary",
+                "roe", "operating_margin", "debt_ratio",
+                "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
+                "macd_hist", "macd_signal", "tech_summary",
+                "dividend_history",
+                "future_target", "stop_loss", "investment_horizon",
+                "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
+            }
+            orig_by_code = {s.get("code"): s for s in analyzed}
+            for s in stocks:
+                orig = orig_by_code.get(s.get("code"), {})
+                for key in _PRESERVE:
+                    if key in orig:
+                        s[key] = orig[key]
             print(f"  2차 AI 분석 완료: {len(stocks)}개 종목 보강")
             return stocks
     except Exception as e:
@@ -584,6 +599,9 @@ def run_korean() -> dict:
             if indicators:
                 stock.update(indicators)
             trend_map[stock.get("code", "")] = trend
+            # trend_summary를 Gemini에 의존하지 않고 직접 세팅
+            if trend:
+                stock["trend_summary"] = _format_trend_str(trend)
             print(f"    {stock['name']}: ROE={indicators.get('roe','N/A')}% "
                   f"영업이익률={indicators.get('operating_margin','N/A')}% "
                   f"부채비율={indicators.get('debt_ratio','N/A')}% "
