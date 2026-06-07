@@ -3,7 +3,6 @@ import os
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, os.path.join(_ROOT, "lib"))
 sys.path.insert(0, _HERE)
 
 from flask import Flask, request, jsonify, send_from_directory
