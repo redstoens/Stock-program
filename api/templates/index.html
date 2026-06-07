@@ -137,11 +137,16 @@
     <p class="memo-hint">비워두면 PER·ROE 기준 저평가 종목을 자동 선정합니다.</p>
   </div>
 
-  <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()">🔍 리포트 생성</button>
+  <div id="cached-bar" style="display:none; background:#f0fff4; border:1.5px solid #9ae6b4; border-radius:10px; padding:0.75rem 1.25rem; margin-bottom:1rem; font-size:0.85rem; color:#276749; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:0.5rem;">
+    <span id="cached-date-label"></span>
+    <span style="color:#a0aec0; font-size:0.78rem;">매일 오후 3:30 자동 업데이트</span>
+  </div>
+
+  <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()">🔍 새로 분석하기</button>
 
   <div id="loading">
     <div class="spinner"></div>
-    <p>네이버금융 데이터 수집 및 AI 분석 중...<br/>20~40초 소요됩니다</p>
+    <p>데이터 수집 및 AI 분석 중...<br/>20~40초 소요됩니다</p>
   </div>
 
   <div id="error-box"></div>
@@ -181,6 +186,35 @@
     document.getElementById('short-section').innerHTML = '';
     document.getElementById('long-section').innerHTML = '';
     document.getElementById('history-section').innerHTML = '';
+    document.getElementById('cached-bar').style.display = 'none';
+    loadCachedData();
+  }
+
+  async function loadCachedData() {
+    const endpoint = currentMarket === 'us' ? '/api/cached-us' : '/api/cached-kr';
+    try {
+      const res = await fetch(endpoint);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.success || !data.stocks) return;
+
+      reportMarkdown = data.report;
+      renderHistory(data.overlaps, data.prev_date);
+      renderStocks(data.stocks, '단기', 'short-section', currentMarket);
+      renderStocks(data.stocks, '중장기', 'long-section', currentMarket);
+
+      const marketLabel = currentMarket === 'us' ? '🇺🇸 S&P 500' : '🇰🇷 KOSPI';
+      document.getElementById('result-meta').textContent =
+        `${marketLabel} · 분석일: ${data.date}`;
+      document.getElementById('result-section').style.display = 'block';
+
+      const bar = document.getElementById('cached-bar');
+      document.getElementById('cached-date-label').textContent =
+        `✅ 마지막 자동 분석: ${data.date}`;
+      bar.style.display = 'flex';
+    } catch (e) {
+      // 캐시 없으면 조용히 무시 (버튼으로 직접 분석 가능)
+    }
   }
 
   async function runAnalysis() {
@@ -363,6 +397,8 @@
         </div>`;
     });
   }
+
+  window.addEventListener('load', loadCachedData);
 
   function downloadReport() {
     if (!reportMarkdown) return;

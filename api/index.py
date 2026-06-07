@@ -4,6 +4,7 @@ import os
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
+import json
 from flask import Flask, request, jsonify, render_template
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
 from scraper_us import fetch_sp500_stocks, format_for_prompt_us
@@ -18,6 +19,26 @@ app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/api/cached-kr")
+def cached_kr():
+    path = os.path.join(_HERE, "data", "latest_kr.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "no_data"}), 404
+
+
+@app.route("/api/cached-us")
+def cached_us():
+    path = os.path.join(_HERE, "data", "latest_us.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"success": False, "error": "no_data"}), 404
 
 
 @app.route("/api/analyze", methods=["POST"])
