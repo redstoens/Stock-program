@@ -57,6 +57,11 @@
     .badge-type { background: #faf5ff; color: #6b46c1; }
     .badge-per  { background: #ebf8ff; color: #2b6cb0; }
     .badge-roe  { background: #f0fff4; color: #276749; }
+    .badge-streak { font-weight: 700; }
+    .streak-2 { background: #ebf8ff; color: #2b6cb0; border: 1.5px solid #bee3f8; }
+    .streak-3 { background: #e9d8fd; color: #553c9a; border: 1.5px solid #d6bcfa; }
+    .streak-4 { background: #fefcbf; color: #744210; border: 1.5px solid #f6e05e; }
+    .streak-hi { background: #fff5f5; color: #9b2c2c; border: 1.5px solid #feb2b2; }
     .badge-risk-low { background: #f0fff4; color: #276749; }
     .badge-risk-mid { background: #fffbeb; color: #744210; }
     .badge-risk-hi  { background: #fff5f5; color: #c53030; }
@@ -743,6 +748,13 @@
             ${per ? `<span class="badge badge-per">${per}</span>` : ''}
             ${roe ? `<span class="badge badge-roe">${roe}</span>` : ''}
             ${riskCls ? `<span class="badge ${riskCls}">${riskLbl}</span>` : ''}
+            ${(() => {
+              const d = s.consecutive_days;
+              if (!d || d < 2) return '';
+              const cls = d >= 5 ? 'streak-hi' : d >= 4 ? 'streak-4' : d >= 3 ? 'streak-3' : 'streak-2';
+              const icon = d >= 5 ? '🔥' : '🔁';
+              return `<span class="badge badge-streak ${cls}">${icon} ${d}일 연속 추천</span>`;
+            })()}
           </div>
           ${(s.hold_period || s.horizon_reason) ? `
           <div class="horizon-bar">

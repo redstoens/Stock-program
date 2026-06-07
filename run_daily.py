@@ -607,6 +607,35 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
     print(f"  투자 검증 업데이트: 총 {total}개 (신규 {added}개, 진행중 {active}개)")
 
 
+# ── 연속 추천 횟수 ───────────────────────────────────────────────
+
+def _count_consecutive_recs(code: str, track_path: str) -> int:
+    """해당 종목이 며칠 연속으로 추천됐는지 계산 (오늘 포함)."""
+    try:
+        with open(track_path, encoding="utf-8") as f:
+            track = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return 1
+
+    rec_dates = sorted(
+        set(r["rec_date"] for r in track.get("records", []) if r.get("code") == code),
+        reverse=True,
+    )
+    if not rec_dates:
+        return 1
+
+    streak = 1
+    for i in range(1, len(rec_dates)):
+        d1 = date.fromisoformat(rec_dates[i - 1])
+        d2 = date.fromisoformat(rec_dates[i])
+        # 3일 이내 간격이면 연속 거래일로 간주 (주말·공휴일 처리)
+        if (d1 - d2).days <= 3:
+            streak += 1
+        else:
+            break
+    return streak
+
+
 # ── 뉴스 ───────────────────────────────────────────────────────
 
 def _fetch_news(company_name: str) -> list[str]:
@@ -684,7 +713,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
         if stocks:
             # Gemini가 덮어쓰면 안 되는 필드 원본값으로 복원
             _PRESERVE = {
-                "buy_score", "buy_score_label",
+                "buy_score", "buy_score_label", "consecutive_days",
                 "earnings_trend", "trend_summary",
                 "roe", "operating_margin", "debt_ratio",
                 "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
@@ -792,6 +821,13 @@ def run_korean() -> dict:
     # 투자 추적 업데이트
     _update_tracking(analyzed, "api/data/track_kr.json")
 
+    # 연속 추천 횟수 (트래킹 기록 후 계산해야 오늘 포함)
+    for stock in analyzed:
+        days = _count_consecutive_recs(stock.get("code", ""), "api/data/track_kr.json")
+        if days >= 2:
+            stock["consecutive_days"] = days
+            print(f"    {stock['name']}: {days}일 연속 추천")
+
     return {
         "success": True,
         "stocks": analyzed,
@@ -842,6 +878,13 @@ def run_us() -> dict:
 
     # 미국주 투자 추적 업데이트
     _update_tracking(analyzed, "api/data/track_us.json", market="us")
+
+    # 연속 추천 횟수
+    for stock in analyzed:
+        days = _count_consecutive_recs(stock.get("code", ""), "api/data/track_us.json")
+        if days >= 2:
+            stock["consecutive_days"] = days
+            print(f"    {stock['name']}: {days}일 연속 추천")
 
     return {
         "success": True,
