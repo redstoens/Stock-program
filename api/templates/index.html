@@ -230,6 +230,11 @@
     .tech-badge.ma-bull  { background: #ebf8ff; border-color: #bee3f8; color: #2b6cb0; font-weight: 700; }
     .tech-badge.ma-bear  { background: #fff5f5; border-color: #feb2b2; color: #c53030; font-weight: 700; }
     .tech-badge.ma-mixed { background: #fffbeb; border-color: #f6e05e; color: #744210; font-weight: 700; }
+    .vol-급증   { background: #fff3e0; border-color: #fbb040; color: #7b3f00; font-weight: 700; }
+    .vol-증가   { background: #e8f5e9; border-color: #a5d6a7; color: #1b5e20; font-weight: 700; }
+    .vol-보통   { background: #f7fafc; border-color: #e2e8f0; color: #4a5568; }
+    .vol-감소   { background: #f7fafc; border-color: #e2e8f0; color: #a0aec0; }
+    .vol-급감   { background: #fafafa; border-color: #e2e8f0; color: #cbd5e0; }
     .tech-explain { margin-top: 0.65rem; padding: 0.55rem 0.7rem; background: #f8f9fa; border-radius: 7px; border: 1px solid #e9ecef; display: flex; flex-direction: column; gap: 0.3rem; }
     .te-row { display: flex; gap: 0.45rem; font-size: 0.72rem; line-height: 1.45; align-items: baseline; }
     .te-term { font-weight: 700; color: #4a5568; white-space: nowrap; min-width: 5.5rem; }
@@ -786,6 +791,12 @@
             const macdCls = (s.macd_signal || '').includes('골든') ? 'macd-golden' : 'macd-dead';
             const ma20Str = s.ma20 ? `MA20 ${s.ma20}원` : '';
             const ma60Str = s.ma60 && s.ma60 !== 'N/A' ? `MA60 ${s.ma60}원` : '';
+            // 거래량
+            const volRatio = parseFloat(s.volume_ratio || 0);
+            const volSig   = s.volume_signal || '';
+            const volCls   = volSig ? `vol-${volSig}` : '';
+            const volLabel = volRatio > 0 ? `📊 거래량 평균의 ${volRatio}배 (${volSig})` : '';
+
             // 용어 설명 동적 생성
             const explains = [];
             // RSI
@@ -806,6 +817,17 @@
             // MA 가격선
             if (s.ma20) explains.push(['MA20', `최근 20거래일 종가 평균(${s.ma20}). 단기 지지·저항선으로 활용`]);
             if (s.ma60 && s.ma60 !== 'N/A') explains.push(['MA60', `최근 60거래일 종가 평균(${s.ma60}). 중기 추세 기준선`]);
+            // 거래량
+            if (volRatio > 0) {
+              const volDescMap = {
+                '급증': `평균 대비 ${volRatio}배 — 강한 수급 집중. 세력 유입 또는 뉴스 반응 가능성`,
+                '증가': `평균 대비 ${volRatio}배 — 거래 활발. 방향 확인 시 모멘텀 신호`,
+                '보통': `평균 대비 ${volRatio}배 — 정상 범위. 특이 신호 없음`,
+                '감소': `평균 대비 ${volRatio}배 — 거래 부진. 방향성 약화 가능`,
+                '급감': `평균 대비 ${volRatio}배 — 극히 낮은 거래. 관심 이탈 또는 휴장 근처`,
+              };
+              explains.push(['거래량(20일比)', volDescMap[volSig] || `평균 대비 ${volRatio}배`]);
+            }
 
             const explainHtml = explains.map(([term, desc]) =>
               `<div class="te-row"><span class="te-term">${term}</span><span class="te-desc">${desc}</span></div>`
@@ -824,6 +846,7 @@
                 ${s.macd_signal ? `<span class="tech-badge ${macdCls}">MACD ${s.macd_signal}</span>` : ''}
                 ${ma20Str ? `<span class="tech-badge">${ma20Str}</span>` : ''}
                 ${ma60Str ? `<span class="tech-badge">${ma60Str}</span>` : ''}
+                ${volLabel ? `<span class="tech-badge ${volCls}">${volLabel}</span>` : ''}
               </div>
               <div class="tech-explain">${explainHtml}</div>
             </div>`;

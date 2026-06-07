@@ -424,6 +424,28 @@ def _fetch_technical_indicators(code: str, market: str = "kr") -> dict:
         hist_v = float((macd_l - sig_l).iloc[-1])
         macd_sig = "골든크로스" if hist_v > 0 else "데드크로스"
 
+        # 거래량 이상 감지 (오늘 vs 20일 평균)
+        vol_result = {}
+        try:
+            volumes = hist["Volume"].dropna()
+            if len(volumes) >= 2:
+                today_vol = int(volumes.iloc[-1])
+                avg_len   = min(20, len(volumes) - 1)
+                avg_vol   = float(volumes.iloc[-avg_len - 1:-1].mean())
+                if avg_vol > 0:
+                    v_ratio = round(today_vol / avg_vol, 1)
+                    if v_ratio >= 3.0:   v_sig = "급증"
+                    elif v_ratio >= 2.0: v_sig = "증가"
+                    elif v_ratio >= 1.2: v_sig = "보통"
+                    elif v_ratio >= 0.5: v_sig = "감소"
+                    else:                v_sig = "급감"
+                    vol_result = {
+                        "volume_ratio":  str(v_ratio),
+                        "volume_signal": v_sig,
+                    }
+        except Exception:
+            pass
+
         fmt = (lambda p: f"${p:.2f}") if market == "us" else (lambda p: f"{int(p):,}")
         return {
             "rsi":         str(rsi),
@@ -434,6 +456,7 @@ def _fetch_technical_indicators(code: str, market: str = "kr") -> dict:
             "macd_hist":   str(round(hist_v, 1)),
             "macd_signal": macd_sig,
             "tech_summary": f"RSI {rsi}({rsi_sig}) / MA {ma_sig} / MACD {macd_sig}",
+            **vol_result,
         }
     except Exception as e:
         print(f"    기술적 지표 실패 ({code}): {e}")
@@ -666,6 +689,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
                 "roe", "operating_margin", "debt_ratio",
                 "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
                 "macd_hist", "macd_signal", "tech_summary",
+                "volume_ratio", "volume_signal",
                 "dividend_history",
                 "future_target", "stop_loss", "investment_horizon",
                 "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
