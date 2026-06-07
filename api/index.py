@@ -4,16 +4,19 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from flask import Flask, request, jsonify, send_from_directory
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
+from scraper_us import fetch_sp500_stocks, format_for_prompt_us
 from analyzer import analyze_stocks
+from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 
-app = Flask(__name__, static_folder="../public")
+PUBLIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "public"))
+app = Flask(__name__, static_folder=PUBLIC_DIR)
 
 
 @app.route("/")
 def index():
-    return send_from_directory("../public", "index.html")
+    return send_from_directory(PUBLIC_DIR, "index.html")
 
 
 @app.route("/api/analyze", methods=["POST"])
@@ -52,6 +55,40 @@ def analyze():
             "stocks": analyzed,
             "prev_date": prev_report.get("date") if prev_report else None,
             "overlaps": overlaps,
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/analyze-us", methods=["POST"])
+def analyze_us():
+    try:
+        data = request.get_json(force=True)
+        memo = data.get("memo", "")
+
+        stocks_raw = fetch_sp500_stocks(top_n=50)
+        stock_table = format_for_prompt_us(stocks_raw)
+        analyzed = analyze_stocks_us(stock_table, memo)
+
+        stock_map = {s["code"]: s for s in stocks_raw}
+        for stock in analyzed:
+            code = stock.get("code", "")
+            if code in stock_map:
+                raw = stock_map[code]
+                stock.setdefault("current_price_raw", raw.get("current_price_raw", 0))
+                stock.setdefault("week52_high", raw.get("week52_high", ""))
+                stock.setdefault("week52_low", raw.get("week52_low", ""))
+                stock.setdefault("week52_pct_from_high", raw.get("week52_pct_from_high", ""))
+
+        report_md = build_report(analyzed, memo)
+
+        return jsonify({
+            "success": True,
+            "report": report_md,
+            "stocks": analyzed,
+            "prev_date": None,
+            "overlaps": [],
         })
 
     except Exception as e:

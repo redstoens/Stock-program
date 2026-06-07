@@ -2,7 +2,8 @@ import json
 import os
 from datetime import date, datetime
 
-REPORTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "reports")
+_BASE = "/tmp" if os.path.isdir("/tmp") else os.path.dirname(os.path.dirname(__file__))
+REPORTS_DIR = os.path.join(_BASE, "reports")
 
 
 def _ensure_dir():
@@ -32,17 +33,20 @@ def save_report(stocks: list[dict]) -> None:
 
 
 def load_previous_report() -> dict | None:
-    """가장 최근 저장된 리포트를 반환한다. 없으면 None."""
+    """오늘 이전 날짜 리포트 중 가장 최근 것을 반환한다. 없으면 None."""
     _ensure_dir()
+    today = date.today().isoformat()
     files = sorted(
         [f for f in os.listdir(REPORTS_DIR) if f.endswith(".json")],
         reverse=True,
     )
-    if not files:
-        return None
-    path = os.path.join(REPORTS_DIR, files[0])
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    for filename in files:
+        path = os.path.join(REPORTS_DIR, filename)
+        with open(path, "r", encoding="utf-8") as f:
+            report = json.load(f)
+        if report.get("date", "") < today:
+            return report
+    return None
 
 
 def compare_with_previous(current_stocks: list[dict], prev_report: dict | None) -> list[dict]:

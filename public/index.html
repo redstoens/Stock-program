@@ -108,6 +108,11 @@
     .horizon-bar .h-period { font-weight: 700; color: #2d3748; }
     .horizon-bar .h-reason { color: #718096; }
     .disclaimer { font-size: 0.78rem; color: #a0aec0; text-align: center; margin-top: 2rem; line-height: 1.6; }
+
+    .market-tabs { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .tab-btn { flex: 1; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 10px; background: white; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.2s; }
+    .tab-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
+    .tab-btn.active { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-color: transparent; }
   </style>
 </head>
 <body>
@@ -118,6 +123,11 @@
 </header>
 
 <div class="container">
+
+  <div class="market-tabs">
+    <button class="tab-btn active" id="tab-kr" onclick="switchMarket('kr')">🇰🇷 국내주 (KOSPI)</button>
+    <button class="tab-btn" id="tab-us" onclick="switchMarket('us')">🇺🇸 미국주 (S&P 500)</button>
+  </div>
 
   <div class="card">
     <h2>분석 메모 <span style="font-weight:400;color:#a0aec0">(선택사항)</span></h2>
@@ -152,10 +162,26 @@
 
 <script>
   let reportMarkdown = '';
+  let currentMarket = 'kr';
 
   const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
   const RISK_LABEL = { '하': '🟢 리스크 낮음', '중': '🟡 리스크 보통', '상': '🔴 리스크 높음' };
   const TREND_ICON = { '개선': '📈', '보합': '➡️', '악화': '📉' };
+
+  function switchMarket(market) {
+    currentMarket = market;
+    document.getElementById('tab-kr').classList.toggle('active', market === 'kr');
+    document.getElementById('tab-us').classList.toggle('active', market === 'us');
+    const placeholders = {
+      kr: '예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주',
+      us: '예: 기술주 위주로 / 배당 성장주 위주 / AI 관련주 위주로'
+    };
+    document.getElementById('memo').placeholder = placeholders[market];
+    document.getElementById('result-section').style.display = 'none';
+    document.getElementById('short-section').innerHTML = '';
+    document.getElementById('long-section').innerHTML = '';
+    document.getElementById('history-section').innerHTML = '';
+  }
 
   async function runAnalysis() {
     const memo = document.getElementById('memo').value.trim();
@@ -165,7 +191,8 @@
     document.getElementById('result-section').style.display = 'none';
 
     try {
-      const res = await fetch('/api/analyze', {
+      const endpoint = currentMarket === 'us' ? '/api/analyze-us' : '/api/analyze';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ memo })
@@ -175,12 +202,13 @@
 
       reportMarkdown = data.report;
       renderHistory(data.overlaps, data.prev_date);
-      renderStocks(data.stocks, '단기', 'short-section');
-      renderStocks(data.stocks, '중장기', 'long-section');
+      renderStocks(data.stocks, '단기', 'short-section', currentMarket);
+      renderStocks(data.stocks, '중장기', 'long-section', currentMarket);
 
+      const marketLabel = currentMarket === 'us' ? '🇺🇸 S&P 500' : '🇰🇷 KOSPI';
       const now = new Date().toLocaleDateString('ko-KR');
       document.getElementById('result-meta').textContent =
-        `생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
+        `${marketLabel} · 생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
       document.getElementById('result-section').style.display = 'block';
 
     } catch (err) {
@@ -218,7 +246,7 @@
     </div>`;
   }
 
-  function renderStocks(stocks, horizon, containerId) {
+  function renderStocks(stocks, horizon, containerId, market) {
     const container = document.getElementById(containerId);
     const filtered = stocks.filter(s => (s.investment_horizon || '중장기') === horizon);
 
@@ -246,8 +274,8 @@
       let barHtml = '';
       try {
         const cur  = s.current_price_raw;
-        const high = parseInt((s.week52_high || '').replace(/,/g, ''));
-        const low  = parseInt((s.week52_low  || '').replace(/,/g, ''));
+        const high = parseFloat((s.week52_high || '').replace(/[$,]/g, ''));
+        const low  = parseFloat((s.week52_low  || '').replace(/[$,]/g, ''));
         if (cur && high && low && high > low) {
           const pct = Math.min(100, Math.max(0, Math.round((cur - low) / (high - low) * 100)));
           barHtml = `
@@ -325,7 +353,7 @@
               <div class="plbl">🎯 12개월 목표주가</div>
               <div class="pval">${s.future_target || '-'}</div>
               <div style="font-size:0.78rem;color:#276749;margin-top:0.2rem;font-weight:600">${s.upside_pct ? '상승여력 ' + s.upside_pct : ''}</div>
-              ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${s.current_price_raw.toLocaleString()}원</div>` : ''}
+              ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${market === 'us' ? '$' + Number(s.current_price_raw).toFixed(2) : Number(s.current_price_raw).toLocaleString() + '원'}</div>` : ''}
             </div>
             <div class="price-box stoploss">
               <div class="plbl">🛑 손절 기준가</div>
