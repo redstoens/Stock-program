@@ -1,91 +1,129 @@
-from datetime import date, timedelta
-from pykrx import stock as krx
+from concurrent.futures import ThreadPoolExecutor
+import yfinance as yf
+
+# KOSPI 주요 종목 (시가총액 상위, .KS = KOSPI)
+KOSPI_TICKERS = [
+    "005930.KS",  # 삼성전자
+    "000660.KS",  # SK하이닉스
+    "207940.KS",  # 삼성바이오로직스
+    "005380.KS",  # 현대차
+    "000270.KS",  # 기아
+    "068270.KS",  # 셀트리온
+    "051910.KS",  # LG화학
+    "055550.KS",  # 신한지주
+    "035420.KS",  # NAVER
+    "012330.KS",  # 현대모비스
+    "028260.KS",  # 삼성물산
+    "105560.KS",  # KB금융
+    "066570.KS",  # LG전자
+    "032830.KS",  # 삼성생명
+    "096770.KS",  # SK이노베이션
+    "003550.KS",  # LG
+    "017670.KS",  # SK텔레콤
+    "015760.KS",  # 한국전력
+    "034730.KS",  # SK
+    "000810.KS",  # 삼성화재
+    "086790.KS",  # 하나금융지주
+    "009150.KS",  # 삼성전기
+    "030200.KS",  # KT
+    "018260.KS",  # 삼성SDS
+    "010130.KS",  # 고려아연
+    "006400.KS",  # 삼성SDI
+    "011200.KS",  # HMM
+    "035720.KS",  # 카카오
+    "003490.KS",  # 대한항공
+    "090430.KS",  # 아모레퍼시픽
+    "010950.KS",  # S-Oil
+    "024110.KS",  # 기업은행
+    "316140.KS",  # 우리금융지주
+    "259960.KS",  # 크래프톤
+    "047810.KS",  # 한국항공우주
+    "009540.KS",  # HD한국조선해양
+    "034020.KS",  # 두산에너빌리티
+    "000720.KS",  # 현대건설
+    "012450.KS",  # 한화에어로스페이스
+    "329180.KS",  # HD현대중공업
+    "267250.KS",  # HD현대
+    "078930.KS",  # GS
+    "000100.KS",  # 유한양행
+    "128940.KS",  # 한미약품
+    "352820.KS",  # 하이브
+    "021240.KS",  # 코웨이
+    "139480.KS",  # 이마트
+    "097950.KS",  # CJ제일제당
+    "004990.KS",  # 롯데지주
+    "272210.KS",  # 한화시스템
+    "336260.KS",  # 두산밥캣
+    "028050.KS",  # 삼성엔지니어링
+    "003230.KS",  # 삼양식품
+    "010140.KS",  # 삼성중공업
+    "011790.KS",  # SKC
+    "377300.KS",  # 카카오페이
+    "251270.KS",  # 넷마블
+    "004370.KS",  # 농심
+    "161390.KS",  # 한국타이어앤테크놀로지
+    "042660.KS",  # 한화오션
+]
 
 
-def _find_trading_days(n: int = 2) -> list[str]:
-    """최근 n개 영업일(YYYYMMDD) 반환, 최신일이 index 0."""
-    today = date.today()
-    found = []
-    for offset in range(1, 15):
-        d = (today - timedelta(days=offset)).strftime("%Y%m%d")
-        try:
-            if krx.get_market_ticker_list(d, market="KOSPI"):
-                found.append(d)
-                if len(found) >= n:
-                    break
-        except Exception:
-            continue
-    return found
+def _fetch_one(ticker_sym: str) -> dict | None:
+    try:
+        info = yf.Ticker(ticker_sym).info
+        code = ticker_sym.replace(".KS", "").replace(".KQ", "")
+        name = info.get("longName") or info.get("shortName") or code
+
+        cur_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+        market_cap = info.get("marketCap") or 0
+        if not cur_price or not market_cap:
+            return None
+
+        change_pct = info.get("regularMarketChangePercent") or 0
+        per_val = info.get("trailingPE") or 0
+        roe_raw = info.get("returnOnEquity") or 0
+        w52_high = info.get("fiftyTwoWeekHigh") or 0
+        w52_low = info.get("fiftyTwoWeekLow") or 0
+
+        mktcap_억 = market_cap // 100_000_000
+        per = str(round(per_val, 1)) if per_val > 0 else "N/A"
+        roe = str(round(roe_raw * 100, 1)) if roe_raw else "N/A"
+        pct_from_high = round((cur_price - w52_high) / w52_high * 100, 1) if w52_high > 0 else 0
+
+        return {
+            "code": code,
+            "name": name,
+            "price": f"{int(cur_price):,}",
+            "change_rate": f"{change_pct:+.2f}%" if change_pct else "",
+            "market_cap": f"{mktcap_억:,}",
+            "market_cap_raw": market_cap,
+            "per": per,
+            "roe": roe,
+            "current_price_raw": int(cur_price),
+            "week52_high": f"{int(w52_high):,}" if w52_high else "N/A",
+            "week52_low": f"{int(w52_low):,}" if w52_low else "N/A",
+            "week52_pct_from_high": f"{pct_from_high:+.1f}%" if w52_high else "N/A",
+        }
+    except Exception:
+        return None
 
 
 def fetch_kospi_stocks(top_n: int = 80) -> list[dict]:
-    """KOSPI 시가총액 상위 종목 — KRX 공식 데이터(pykrx)."""
-    trading_days = _find_trading_days(2)
-    if not trading_days:
-        raise RuntimeError("최근 영업일을 찾을 수 없습니다.")
+    """KOSPI 주요 종목 데이터 — yfinance (글로벌 IP 접근 가능)."""
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(_fetch_one, KOSPI_TICKERS))
 
-    trade_date = trading_days[0]
-    prev_date = trading_days[1] if len(trading_days) > 1 else None
+    stocks = [r for r in results if r is not None]
+    if not stocks:
+        raise RuntimeError("종목 데이터를 가져올 수 없습니다. 잠시 후 다시 시도해주세요.")
 
-    # 시가총액 (정렬 기준)
-    cap_df = krx.get_market_cap(trade_date, market="KOSPI")
-    if cap_df.empty:
-        raise RuntimeError("시가총액 데이터를 가져올 수 없습니다.")
-    cap_df = cap_df.sort_values("시가총액", ascending=False)
+    stocks.sort(key=lambda x: x["market_cap_raw"], reverse=True)
+    for i, s in enumerate(stocks[:top_n], start=1):
+        s["rank"] = i
 
-    # 종가 (오늘 / 전일 — 등락률 계산용)
-    ohlcv_today = krx.get_market_ohlcv_by_ticker(trade_date, market="KOSPI")
-    ohlcv_prev = krx.get_market_ohlcv_by_ticker(prev_date, market="KOSPI") if prev_date else None
-
-    # PER · EPS · BPS (ROE = EPS/BPS × 100)
-    fund_df = krx.get_market_fundamental(trade_date, market="KOSPI")
-
-    stocks = []
-    for i, ticker in enumerate(cap_df.index[:top_n], start=1):
-        name = krx.get_market_ticker_name(ticker)
-
-        # 현재가 · 등락률
-        cur_price, change_rate = 0, ""
-        if ticker in ohlcv_today.index:
-            cur_price = int(ohlcv_today.loc[ticker, "종가"])
-            if ohlcv_prev is not None and ticker in ohlcv_prev.index:
-                prev_close = int(ohlcv_prev.loc[ticker, "종가"])
-                if prev_close > 0:
-                    chg = (cur_price - prev_close) / prev_close * 100
-                    change_rate = f"{chg:+.2f}%"
-
-        # 시가총액 (억원)
-        mktcap_억 = int(cap_df.loc[ticker, "시가총액"]) // 100_000_000
-
-        # PER · ROE
-        per, roe = "N/A", "N/A"
-        if ticker in fund_df.index:
-            row_f = fund_df.loc[ticker]
-            per_val = float(row_f.get("PER", 0) or 0)
-            eps = float(row_f.get("EPS", 0) or 0)
-            bps = float(row_f.get("BPS", 0) or 0)
-            if per_val > 0:
-                per = str(round(per_val, 1))
-            if bps > 0:
-                roe = str(round(eps / bps * 100, 1))
-
-        stocks.append({
-            "rank": i,
-            "name": name,
-            "code": ticker,
-            "price": f"{cur_price:,}" if cur_price else "N/A",
-            "change_rate": change_rate,
-            "market_cap": f"{mktcap_억:,}",
-            "per": per,
-            "roe": roe,
-            "current_price_raw": cur_price,
-        })
-
-    return stocks
+    return stocks[:top_n]
 
 
 def fetch_stock_detail(code: str) -> dict:
-    """개별 종목 52주 고저가 — pykrx KRX 데이터."""
+    """개별 종목 52주 고저가 — yfinance."""
     detail = {
         "current_price_raw": 0,
         "week52_high": "N/A",
@@ -93,24 +131,19 @@ def fetch_stock_detail(code: str) -> dict:
         "week52_pct_from_high": "N/A",
     }
     try:
-        today_str = date.today().strftime("%Y%m%d")
-        year_ago = (date.today() - timedelta(days=365)).strftime("%Y%m%d")
+        info = yf.Ticker(f"{code}.KS").info
+        cur_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+        w52_high = info.get("fiftyTwoWeekHigh") or 0
+        w52_low = info.get("fiftyTwoWeekLow") or 0
 
-        ohlcv = krx.get_market_ohlcv_by_date(year_ago, today_str, code)
-        if ohlcv.empty:
-            return detail
-
-        w52_high = int(ohlcv["고가"].max())
-        w52_low = int(ohlcv["저가"].min())
-        cur_price = int(ohlcv["종가"].iloc[-1])
-        pct = round((cur_price - w52_high) / w52_high * 100, 1) if w52_high > 0 else 0
-
-        detail.update({
-            "current_price_raw": cur_price,
-            "week52_high": f"{w52_high:,}",
-            "week52_low": f"{w52_low:,}",
-            "week52_pct_from_high": f"{pct:+.1f}%",
-        })
+        if cur_price and w52_high:
+            pct = round((cur_price - w52_high) / w52_high * 100, 1)
+            detail.update({
+                "current_price_raw": int(cur_price),
+                "week52_high": f"{int(w52_high):,}",
+                "week52_low": f"{int(w52_low):,}",
+                "week52_pct_from_high": f"{pct:+.1f}%",
+            })
     except Exception:
         pass
     return detail
