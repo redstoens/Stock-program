@@ -113,6 +113,41 @@
     .tab-btn { flex: 1; padding: 0.75rem; border: 2px solid #e2e8f0; border-radius: 10px; background: white; font-size: 0.95rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.2s; }
     .tab-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
     .tab-btn.active { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-color: transparent; }
+
+    /* ── 투자 검증 ── */
+    #verify-section { display: none; }
+    .verify-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1.2rem; }
+    .vs-card { background: white; border-radius: 10px; padding: 0.9rem 0.75rem; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
+    .vs-card .vs-num { font-size: 1.5rem; font-weight: 800; display: block; }
+    .vs-card .vs-lbl { font-size: 0.72rem; color: #718096; font-weight: 600; margin-top: 0.2rem; }
+    .vs-card.total   .vs-num { color: #2b6cb0; }
+    .vs-card.active  .vs-num { color: #2b6cb0; }
+    .vs-card.success .vs-num { color: #276749; }
+    .vs-card.loss    .vs-num { color: #c53030; }
+    .vs-card.expire  .vs-num { color: #744210; }
+
+    .verify-filter { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .vf-btn { padding: 0.35rem 0.9rem; border: 1.5px solid #e2e8f0; border-radius: 999px; background: white; font-size: 0.82rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; }
+    .vf-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
+    .vf-btn.active { background: #2b6cb0; color: white; border-color: transparent; }
+
+    .verify-table-wrap { overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .verify-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    .verify-table th { background: #f7fafc; padding: 0.7rem 0.75rem; text-align: left; font-size: 0.72rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+    .verify-table td { padding: 0.7rem 0.75rem; border-bottom: 1px solid #f0f4f8; vertical-align: middle; white-space: nowrap; }
+    .verify-table tr:last-child td { border-bottom: none; }
+    .verify-table tr:hover td { background: #f7fafc; }
+    .vt-ret.pos { color: #276749; font-weight: 700; }
+    .vt-ret.neg { color: #c53030; font-weight: 700; }
+    .vt-ret.neu { color: #718096; }
+    .status-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+    .status-진행중   { background: #ebf8ff; color: #2b6cb0; }
+    .status-목표달성 { background: #f0fff4; color: #276749; }
+    .status-손절     { background: #fff5f5; color: #c53030; }
+    .status-만료     { background: #fffbeb; color: #744210; }
+    .verify-empty { text-align: center; padding: 3rem 1rem; color: #a0aec0; font-size: 0.9rem; }
+    .verify-avg { background: #f0fff4; border: 1.5px solid #9ae6b4; border-radius: 10px; padding: 0.75rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; color: #276749; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .verify-avg span { font-weight: 700; }
   </style>
 </head>
 <body>
@@ -127,9 +162,40 @@
   <div class="market-tabs">
     <button class="tab-btn active" id="tab-kr" onclick="switchMarket('kr')">🇰🇷 국내주 (KOSPI)</button>
     <button class="tab-btn" id="tab-us" onclick="switchMarket('us')">🇺🇸 미국주 (S&P 500)</button>
+    <button class="tab-btn" id="tab-verify" onclick="switchMarket('verify')">📊 투자 검증</button>
   </div>
 
-  <div class="card">
+  <div id="verify-section">
+    <div id="verify-summary-row" class="verify-summary"></div>
+    <div id="verify-avg-bar" class="verify-avg" style="display:none"></div>
+    <div class="verify-filter">
+      <button class="vf-btn active" id="vf-all"    onclick="filterVerify('all')">전체</button>
+      <button class="vf-btn" id="vf-진행중"         onclick="filterVerify('진행중')">진행중</button>
+      <button class="vf-btn" id="vf-목표달성"       onclick="filterVerify('목표달성')">목표달성</button>
+      <button class="vf-btn" id="vf-손절"           onclick="filterVerify('손절')">손절</button>
+      <button class="vf-btn" id="vf-만료"           onclick="filterVerify('만료')">만료</button>
+    </div>
+    <div class="verify-table-wrap">
+      <table class="verify-table">
+        <thead>
+          <tr>
+            <th>추천일</th>
+            <th>종목명</th>
+            <th>투자유형</th>
+            <th>진입가</th>
+            <th>목표가</th>
+            <th>손절가</th>
+            <th>현재가</th>
+            <th>수익률</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody id="verify-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="memo-card" class="card">
     <h2>분석 메모 <span style="font-weight:400;color:#a0aec0">(선택사항)</span></h2>
     <label class="memo-label">AI에게 원하는 분석 방향을 자유롭게 입력하세요</label>
     <textarea class="memo-input" id="memo" rows="2"
@@ -168,6 +234,7 @@
 <script>
   let reportMarkdown = '';
   let currentMarket = 'kr';
+  let verifyRecords = [];
 
   const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
   const RISK_LABEL = { '하': '🟢 리스크 낮음', '중': '🟡 리스크 보통', '상': '🔴 리스크 높음' };
@@ -175,19 +242,107 @@
 
   function switchMarket(market) {
     currentMarket = market;
+    const isVerify = market === 'verify';
     document.getElementById('tab-kr').classList.toggle('active', market === 'kr');
     document.getElementById('tab-us').classList.toggle('active', market === 'us');
-    const placeholders = {
-      kr: '예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주',
-      us: '예: 기술주 위주로 / 배당 성장주 위주 / AI 관련주 위주로'
-    };
-    document.getElementById('memo').placeholder = placeholders[market];
+    document.getElementById('tab-verify').classList.toggle('active', isVerify);
+    document.getElementById('memo-card').style.display    = isVerify ? 'none' : '';
+    document.getElementById('btn-analyze').style.display  = isVerify ? 'none' : '';
+    document.getElementById('cached-bar').style.display   = 'none';
     document.getElementById('result-section').style.display = 'none';
-    document.getElementById('short-section').innerHTML = '';
-    document.getElementById('long-section').innerHTML = '';
+    document.getElementById('verify-section').style.display = isVerify ? 'block' : 'none';
+    document.getElementById('short-section').innerHTML   = '';
+    document.getElementById('long-section').innerHTML    = '';
     document.getElementById('history-section').innerHTML = '';
-    document.getElementById('cached-bar').style.display = 'none';
-    loadCachedData();
+
+    if (isVerify) {
+      loadVerifyData();
+    } else {
+      const placeholders = {
+        kr: '예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주',
+        us: '예: 기술주 위주로 / 배당 성장주 위주 / AI 관련주 위주로'
+      };
+      document.getElementById('memo').placeholder = placeholders[market];
+      loadCachedData();
+    }
+  }
+
+  async function loadVerifyData() {
+    try {
+      const res = await fetch('/api/verify-kr');
+      const data = await res.json();
+      verifyRecords = (data.records || []).slice().reverse(); // 최신순
+      renderVerify('all');
+    } catch(e) {
+      document.getElementById('verify-tbody').innerHTML =
+        '<tr><td colspan="9" class="verify-empty">데이터를 불러올 수 없습니다.</td></tr>';
+    }
+  }
+
+  function filterVerify(status) {
+    document.querySelectorAll('.vf-btn').forEach(b => b.classList.remove('active'));
+    const btnId = status === 'all' ? 'vf-all' : 'vf-' + status;
+    const btn = document.getElementById(btnId);
+    if (btn) btn.classList.add('active');
+    renderVerify(status);
+  }
+
+  function renderVerify(filter) {
+    const records = filter === 'all' ? verifyRecords
+                                     : verifyRecords.filter(r => r.status === filter);
+
+    // 요약 카드
+    const total   = verifyRecords.length;
+    const active  = verifyRecords.filter(r => r.status === '진행중').length;
+    const success = verifyRecords.filter(r => r.status === '목표달성').length;
+    const loss    = verifyRecords.filter(r => r.status === '손절').length;
+    const expire  = verifyRecords.filter(r => r.status === '만료').length;
+    document.getElementById('verify-summary-row').innerHTML = `
+      <div class="vs-card total">  <span class="vs-num">${total}</span>  <div class="vs-lbl">총 추천</div></div>
+      <div class="vs-card active"> <span class="vs-num">${active}</span> <div class="vs-lbl">진행중</div></div>
+      <div class="vs-card success"><span class="vs-num">${success}</span><div class="vs-lbl">목표달성</div></div>
+      <div class="vs-card loss">   <span class="vs-num">${loss}</span>   <div class="vs-lbl">손절</div></div>`;
+
+    // 평균 수익률 (종결된 종목)
+    const closed = verifyRecords.filter(r => r.exit_return_pct != null);
+    const avgBar = document.getElementById('verify-avg-bar');
+    if (closed.length > 0) {
+      const avg = (closed.reduce((s, r) => s + r.exit_return_pct, 0) / closed.length).toFixed(2);
+      const winRate = Math.round(closed.filter(r => r.exit_return_pct > 0).length / closed.length * 100);
+      const sign = avg >= 0 ? '+' : '';
+      avgBar.style.display = 'flex';
+      avgBar.innerHTML = `평균 수익률 <span>${sign}${avg}%</span> &nbsp;·&nbsp; 승률 <span>${winRate}%</span> &nbsp;·&nbsp; 종결 ${closed.length}개`;
+    } else {
+      avgBar.style.display = 'none';
+    }
+
+    // 테이블
+    const tbody = document.getElementById('verify-tbody');
+    if (records.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" class="verify-empty">해당 항목이 없습니다.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = records.map(r => {
+      const retPct = r.current_return_pct ?? 0;
+      const sign   = retPct >= 0 ? '+' : '';
+      const retCls = retPct > 0 ? 'pos' : retPct < 0 ? 'neg' : 'neu';
+      const curPrice = r.current_price ? Number(r.current_price).toLocaleString() + '원' : '-';
+      const entryPrice = r.entry_price ? Number(r.entry_price).toLocaleString() + '원' : '-';
+      const tgt  = r.target_str  || '-';
+      const sl   = r.stop_loss_str ? r.stop_loss_str.split('(')[0].trim() : '-';
+      const horiz = r.investment_horizon || r.hold_period || '-';
+      return `<tr>
+        <td>${r.rec_date}</td>
+        <td><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
+        <td>${horiz}</td>
+        <td>${entryPrice}</td>
+        <td style="color:#276749">${tgt}</td>
+        <td style="color:#c53030">${sl}</td>
+        <td>${curPrice}</td>
+        <td class="vt-ret ${retCls}">${sign}${retPct.toFixed(2)}%</td>
+        <td><span class="status-badge status-${r.status}">${r.status}</span></td>
+      </tr>`;
+    }).join('');
   }
 
   async function loadCachedData() {

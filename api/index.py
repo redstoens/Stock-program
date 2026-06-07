@@ -31,6 +31,16 @@ def cached_kr():
         return jsonify({"success": False, "error": "no_data"}), 404
 
 
+@app.route("/api/verify-kr")
+def verify_kr():
+    path = os.path.join(_HERE, "data", "track_kr.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"records": []}), 200
+
+
 @app.route("/api/cached-us")
 def cached_us():
     path = os.path.join(_HERE, "data", "latest_us.json")

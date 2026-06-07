@@ -4,11 +4,14 @@ import html
 import io
 import json
 import os
+import re
 import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import date
 from urllib.parse import quote
+
+import yfinance as yf
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
 
@@ -161,6 +164,133 @@ def _format_trend_str(trend: dict) -> str:
     return " → ".join(parts) if parts else "데이터 없음"
 
 
+# ── 투자 검증 추적 ────────────────────────────────────────────
+
+def _parse_price_raw(price_str: str) -> int:
+    """'400,000원' 또는 '290,000원 (현재가 대비 -11.8%)' → 400000."""
+    if not price_str:
+        return 0
+    m = re.search(r"([\d,]+)원", price_str)
+    return int(m.group(1).replace(",", "")) if m else 0
+
+
+def _hold_max_days(hold_period: str) -> int:
+    """'1~2년' → 730, '1-3개월' → 90, '3~6개월' → 180."""
+    if not hold_period:
+        return 365
+    nums = [int(n) for n in re.findall(r"\d+", hold_period)]
+    if not nums:
+        return 365
+    max_n = max(nums)
+    return max_n * 365 if "년" in hold_period else max_n * 30
+
+
+def _fetch_current_price(code: str) -> int:
+    """yfinance로 현재가 조회 (KS → KQ 순서로 시도)."""
+    for suffix in (".KS", ".KQ"):
+        try:
+            info = yf.Ticker(f"{code}{suffix}").info
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+            if price:
+                return int(price)
+        except Exception:
+            pass
+    return 0
+
+
+def _update_tracking(analyzed: list[dict], track_path: str) -> None:
+    """추천 종목을 누적 추적하고 현재가 기반 수익률·상태를 업데이트."""
+    try:
+        with open(track_path, encoding="utf-8") as f:
+            track = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        track = {"records": []}
+
+    today = date.today().isoformat()
+
+    # 오늘 분석 결과 신규 추가 (같은 날 중복 방지)
+    existing_today = {r["code"] for r in track["records"] if r["rec_date"] == today}
+    added = 0
+    for stock in analyzed:
+        code = stock.get("code", "")
+        if not code or code in existing_today:
+            continue
+        entry_price = stock.get("current_price_raw", 0)
+        if not entry_price:
+            continue
+        hold_period = stock.get("hold_period", "")
+        track["records"].append({
+            "rec_date":          today,
+            "code":              code,
+            "name":              stock.get("name", ""),
+            "entry_price":       entry_price,
+            "target_price_raw":  _parse_price_raw(stock.get("future_target", "")),
+            "stop_loss_raw":     _parse_price_raw(stock.get("stop_loss", "")),
+            "target_str":        stock.get("future_target", ""),
+            "stop_loss_str":     stock.get("stop_loss", ""),
+            "investment_horizon": stock.get("investment_horizon", ""),
+            "hold_period":       hold_period,
+            "max_days":          _hold_max_days(hold_period),
+            "status":            "진행중",
+            "current_price":     entry_price,
+            "current_return_pct": 0.0,
+            "last_updated":      today,
+            "exit_date":         None,
+            "exit_price":        None,
+            "exit_return_pct":   None,
+        })
+        added += 1
+
+    # 진행중 종목 현재가 조회
+    active_codes = list({r["code"] for r in track["records"] if r["status"] == "진행중"})
+    price_map: dict[str, int] = {}
+    if active_codes:
+        print(f"  추적 종목 현재가 조회 중 ({len(active_codes)}개)...")
+        for code in active_codes:
+            price = _fetch_current_price(code)
+            if price:
+                price_map[code] = price
+
+    # 각 레코드 상태 업데이트
+    for rec in track["records"]:
+        if rec["status"] != "진행중":
+            continue
+        code = rec["code"]
+        current_price = price_map.get(code, rec["current_price"])
+        if not current_price:
+            continue
+        entry_price = rec["entry_price"]
+        return_pct  = round((current_price - entry_price) / entry_price * 100, 2) if entry_price else 0.0
+        days_held   = (date.today() - date.fromisoformat(rec["rec_date"])).days
+        target_raw  = rec.get("target_price_raw", 0)
+        stop_raw    = rec.get("stop_loss_raw", 0)
+
+        if target_raw > 0 and current_price >= target_raw:
+            new_status = "목표달성"
+        elif stop_raw > 0 and current_price <= stop_raw:
+            new_status = "손절"
+        elif days_held > rec.get("max_days", 365):
+            new_status = "만료"
+        else:
+            new_status = "진행중"
+
+        rec["current_price"]       = current_price
+        rec["current_return_pct"]  = return_pct
+        rec["last_updated"]        = today
+        if new_status != "진행중":
+            rec["status"]          = new_status
+            rec["exit_date"]       = today
+            rec["exit_price"]      = current_price
+            rec["exit_return_pct"] = return_pct
+
+    with open(track_path, "w", encoding="utf-8") as f:
+        json.dump(track, f, ensure_ascii=False, indent=2)
+
+    total  = len(track["records"])
+    active = sum(1 for r in track["records"] if r["status"] == "진행중")
+    print(f"  투자 검증 업데이트: 총 {total}개 (신규 {added}개, 진행중 {active}개)")
+
+
 # ── 뉴스 ───────────────────────────────────────────────────────
 
 def _fetch_news(company_name: str) -> list[str]:
@@ -291,6 +421,9 @@ def run_korean() -> dict:
 
     overlaps = compare_with_previous(analyzed, prev_report)
     save_report(analyzed)
+
+    # 투자 추적 업데이트
+    _update_tracking(analyzed, "api/data/track_kr.json")
 
     return {
         "success": True,
