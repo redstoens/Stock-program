@@ -259,6 +259,26 @@
       "exit_date": null,
       "exit_price": null,
       "exit_return_pct": null
+    },
+    {
+      "rec_date": "2026-06-07",
+      "code": "AMD",
+      "name": "Advanced Micro Devices, Inc.",
+      "entry_price": 466.38,
+      "target_price_raw": 510.0,
+      "stop_loss_raw": 430.0,
+      "target_str": "$510.00",
+      "stop_loss_str": "$430.00 (현재가 대비 -7.8%)",
+      "investment_horizon": "단기",
+      "hold_period": "1~3개월",
+      "max_days": 90,
+      "status": "진행중",
+      "current_price": 466.38,
+      "current_return_pct": 0.0,
+      "last_updated": "2026-06-07",
+      "exit_date": null,
+      "exit_price": null,
+      "exit_return_pct": null
     }
   ],
   "benchmark": {
