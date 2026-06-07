@@ -14,7 +14,7 @@ from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 
-PUBLIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "public"))
+PUBLIC_DIR = os.path.join(_ROOT, "public")
 app = Flask(__name__, static_folder=PUBLIC_DIR)
 
 
