@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""GitHub Actions 일일 분석 스크립트 — DART ROE + yfinance."""
+"""GitHub Actions 일일 분석 스크립트 — DART + 뉴스 + 3년 트렌드 + 2차 AI 분석."""
+import html
 import io
 import json
 import os
@@ -7,6 +8,7 @@ import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from datetime import date
+from urllib.parse import quote
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "api"))
 
@@ -14,6 +16,9 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+
+from google import genai
+from google.genai import types
 
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
 from scraper_us import fetch_sp500_stocks, format_for_prompt_us
@@ -23,7 +28,11 @@ from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 
 DART_KEY = os.getenv("DART_API_KEY", "")
+GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
+MODEL = "gemini-2.5-flash"
 
+
+# ── DART 유틸 ──────────────────────────────────────────────────
 
 def _get_dart_corp_map() -> dict[str, str]:
     """DART 전체 기업코드 다운로드 → stock_code: corp_code 매핑."""
@@ -48,22 +57,15 @@ def _get_dart_corp_map() -> dict[str, str]:
 
 
 def _fetch_dart_indicators(stock_code: str, corp_map: dict) -> dict:
-    """DART 사업보고서에서 ROE·영업이익률(수익성) + 부채비율(안정성) 조회."""
+    """DART 사업보고서에서 ROE·영업이익률·부채비율 조회 (최신 연도 기준)."""
     corp_code = corp_map.get(stock_code)
     if not corp_code:
         return {}
 
-    # 조회할 지표 클래스: {idx_cl_code: {DART지표명: 저장필드명}}
     classes = {
-        "M210000": {  # 수익성 지표
-            "자기자본이익률": "roe",
-            "매출액영업이익률": "operating_margin",
-        },
-        "M220000": {  # 안정성 지표
-            "부채비율": "debt_ratio",
-        },
+        "M210000": {"자기자본이익률": "roe", "매출액영업이익률": "operating_margin"},
+        "M220000": {"부채비율": "debt_ratio"},
     }
-
     result = {}
     for year in ("2024", "2023"):
         for idx_cl_code, field_map in classes.items():
@@ -95,9 +97,147 @@ def _fetch_dart_indicators(stock_code: str, corp_map: dict) -> dict:
                 continue
         if result:
             break
-
     return result
 
+
+def _fetch_dart_trend(stock_code: str, corp_map: dict) -> dict:
+    """DART에서 3년(2022·2023·2024) 수익성 트렌드 조회."""
+    corp_code = corp_map.get(stock_code)
+    if not corp_code:
+        return {}
+
+    trend = {}
+    for year in ("2022", "2023", "2024"):
+        try:
+            r = requests.get(
+                "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
+                params={
+                    "crtfc_key": DART_KEY,
+                    "corp_code": corp_code,
+                    "bsns_year": year,
+                    "reprt_code": "11011",
+                    "idx_cl_code": "M210000",
+                },
+                timeout=10,
+            )
+            data = r.json()
+            if data.get("status") != "000":
+                continue
+            year_data = {}
+            for item in data.get("list", []):
+                nm = item.get("idx_nm", "")
+                val = item.get("idx_val", "").replace(",", "")
+                try:
+                    if "자기자본이익률" in nm:
+                        year_data["roe"] = round(float(val), 1)
+                    elif "매출액영업이익률" in nm:
+                        year_data["om"] = round(float(val), 1)
+                except Exception:
+                    pass
+            if year_data:
+                trend[year] = year_data
+        except Exception:
+            continue
+    return trend
+
+
+def _format_trend_str(trend: dict) -> str:
+    """트렌드 딕셔너리 → AI 프롬프트용 문자열."""
+    if not trend:
+        return "데이터 없음"
+    parts = []
+    for year in ("2022", "2023", "2024"):
+        if year in trend:
+            d = trend[year]
+            parts.append(
+                f"{year}년 ROE {d.get('roe','N/A')}% / 영업이익률 {d.get('om','N/A')}%"
+            )
+    return " → ".join(parts) if parts else "데이터 없음"
+
+
+# ── 뉴스 ───────────────────────────────────────────────────────
+
+def _fetch_news(company_name: str) -> list[str]:
+    """Google News RSS에서 최신 뉴스 헤드라인 3개 반환."""
+    try:
+        query = quote(f"{company_name} 주식")
+        url = f"https://news.google.com/rss/search?q={query}&hl=ko&gl=KR&ceid=KR:ko"
+        r = requests.get(url, timeout=10,
+                         headers={"User-Agent": "Mozilla/5.0"})
+        root = ET.fromstring(r.content)
+        titles = []
+        for item in root.findall(".//item")[:3]:
+            el = item.find("title")
+            if el is not None and el.text:
+                titles.append(html.unescape(el.text))
+        return titles
+    except Exception:
+        return []
+
+
+# ── 2차 AI 분석 ────────────────────────────────────────────────
+
+def _refine_with_context(analyzed: list[dict],
+                         news_map: dict,
+                         trend_map: dict) -> list[dict]:
+    """뉴스 + 3년 트렌드를 반영한 2차 Gemini 분석."""
+    if not GEMINI_KEY:
+        return analyzed
+
+    context_blocks = []
+    for stock in analyzed:
+        code = stock.get("code", "")
+        name = stock.get("name", "")
+        news = news_map.get(code, [])
+        trend = trend_map.get(code, {})
+        news_str = " / ".join(news) if news else "뉴스 없음"
+        trend_str = _format_trend_str(trend)
+        context_blocks.append(
+            f"[{name} ({code})]\n"
+            f"최신 뉴스: {news_str}\n"
+            f"3년 재무 트렌드: {trend_str}"
+        )
+
+    prompt = f"""아래는 AI가 선정한 10개 한국 주식 종목과 각 종목의 실제 최신 뉴스 및 3년 재무 트렌드입니다.
+
+=== 종목별 실제 데이터 ===
+{chr(10).join(context_blocks)}
+
+=== 기존 분석 JSON ===
+{json.dumps({"stocks": analyzed}, ensure_ascii=False)}
+
+위 실제 데이터를 반영해 각 종목의 분석을 보강하세요:
+1. news_summary → 실제 뉴스 헤드라인을 반영해 업데이트 (1-2문장)
+2. reason → 3년 재무 트렌드(ROE·영업이익률 개선/악화 여부) 반영해 보강
+3. trend_summary → "YYYY→YYYY→YYYY 영업이익률/ROE 흐름" 한 줄 요약 (신규 필드)
+4. earnings_trend → 실제 3년 데이터 기반으로 재평가
+
+future_target, stop_loss, investment_horizon 등 나머지 필드는 그대로 유지하세요.
+
+JSON만 반환하세요 (다른 텍스트 없이):
+{{"stocks": [보강된 10개 종목]}}"""
+
+    try:
+        client = genai.Client(api_key=GEMINI_KEY)
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
+        refined = json.loads(response.text)
+        stocks = refined.get("stocks", [])
+        if stocks:
+            print(f"  2차 AI 분석 완료: {len(stocks)}개 종목 보강")
+            return stocks
+    except Exception as e:
+        print(f"  2차 AI 분석 실패 (기존 결과 유지): {e}")
+    return analyzed
+
+
+# ── 메인 분석 함수 ─────────────────────────────────────────────
 
 def run_korean() -> dict:
     print("\n🇰🇷 한국 주식 분석 시작...")
@@ -111,18 +251,36 @@ def run_korean() -> dict:
         detail = fetch_stock_detail(stock.get("code", ""))
         stock.update(detail)
 
-    # DART 공식 지표로 교체 (ROE·영업이익률·부채비율)
+    corp_map = {}
     if DART_KEY:
         corp_map = _get_dart_corp_map()
+
+        # DART 공식 지표 (ROE·영업이익률·부채비율)
+        print("  DART 지표 수집 중...")
         for stock in analyzed:
             indicators = _fetch_dart_indicators(stock.get("code", ""), corp_map)
             if indicators:
                 stock.update(indicators)
-                print(f"  {stock['name']}: ROE={indicators.get('roe','N/A')}% "
+                print(f"    {stock['name']}: ROE={indicators.get('roe','N/A')}% "
                       f"영업이익률={indicators.get('operating_margin','N/A')}% "
                       f"부채비율={indicators.get('debt_ratio','N/A')}%")
     else:
         print("  DART_API_KEY 없음 — yfinance 데이터 사용")
+
+    # 뉴스 + 3년 트렌드 수집
+    print("  뉴스 및 3년 트렌드 수집 중...")
+    news_map, trend_map = {}, {}
+    for stock in analyzed:
+        code = stock.get("code", "")
+        name = stock.get("name", "")
+        news_map[code] = _fetch_news(name)
+        if corp_map:
+            trend_map[code] = _fetch_dart_trend(code, corp_map)
+        print(f"    {name}: 뉴스 {len(news_map[code])}건")
+
+    # 2차 AI 분석 (뉴스 + 트렌드 반영)
+    print("  2차 AI 분석 (뉴스·트렌드 반영) 중...")
+    analyzed = _refine_with_context(analyzed, news_map, trend_map)
 
     overlaps = compare_with_previous(analyzed, prev_report)
     save_report(analyzed)

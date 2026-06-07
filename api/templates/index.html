@@ -390,6 +390,11 @@
             <div class="section-body">⚠️ ${s.risk_reason}</div>
           </div>` : ''}
 
+          ${s.trend_summary ? `<div class="section-block">
+            <div class="section-lbl">3년 재무 트렌드 (DART)</div>
+            <div class="section-body">📊 ${s.trend_summary}</div>
+          </div>` : ''}
+
           <div class="valuation-box">💡 ${s.valuation}</div>
 
           <div class="price-grid">
