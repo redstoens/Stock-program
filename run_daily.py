@@ -224,6 +224,53 @@ def _fetch_current_price(code: str, market: str = "kr") -> float:
     return 0.0
 
 
+def _fetch_dividend_history(code: str, market: str = "kr") -> dict:
+    """yfinance로 최근 3년(2022·2023·2024) 배당 히스토리 + CAGR 계산."""
+    try:
+        if market == "us":
+            divs = yf.Ticker(code).dividends
+        else:
+            divs = None
+            for suffix in (".KS", ".KQ"):
+                d = yf.Ticker(f"{code}{suffix}").dividends
+                if d is not None and not d.empty:
+                    divs = d
+                    break
+        if divs is None or divs.empty:
+            return {}
+
+        # Timestamp.year은 tz 무관하게 동작 → tz 변환 불필요
+        annual: dict[str, float] = {}
+        for year in (2022, 2023, 2024):
+            total = float(sum(v for ts, v in divs.items() if ts.year == year))
+            if total > 0:
+                annual[str(year)] = total
+
+        if not annual:
+            return {}
+
+        years = sorted(annual.keys())
+
+        # CAGR 계산 (2개년 이상일 때)
+        growth_str = ""
+        if len(years) >= 2:
+            n = int(years[-1]) - int(years[0])
+            if n > 0 and annual[years[0]] > 0:
+                cagr = (annual[years[-1]] / annual[years[0]]) ** (1 / n) - 1
+                sign = "+" if cagr >= 0 else ""
+                growth_str = f" (CAGR {sign}{cagr * 100:.1f}%)"
+
+        if market == "us":
+            parts = [f"{y}: ${annual[y]:.2f}" for y in years]
+        else:
+            parts = [f"{y}: {int(annual[y]):,}원" for y in years]
+
+        return {"dividend_history": " → ".join(parts) + growth_str}
+    except Exception as e:
+        print(f"    배당 히스토리 실패 ({code}): {e}")
+        return {}
+
+
 def _fetch_technical_indicators(code: str, market: str = "kr") -> dict:
     """yfinance로 RSI(14)·이동평균(20/60일)·MACD(12,26,9) 계산."""
     try:
@@ -561,6 +608,14 @@ def run_korean() -> dict:
             stock.update(tech)
             print(f"    {stock['name']}: {tech.get('tech_summary', '')}")
 
+    # 배당 히스토리 수집 (3년)
+    print("  배당 히스토리 수집 중...")
+    for stock in analyzed:
+        div = _fetch_dividend_history(stock.get("code", ""))
+        if div:
+            stock.update(div)
+            print(f"    {stock['name']}: {div.get('dividend_history', '')}")
+
     # 2차 AI 분석 (뉴스 + 트렌드 반영)
     print("  2차 AI 분석 (뉴스·트렌드 반영) 중...")
     analyzed = _refine_with_context(analyzed, news_map, trend_map)
@@ -612,6 +667,14 @@ def run_us() -> dict:
         if tech:
             stock.update(tech)
             print(f"    {stock['name']}: {tech.get('tech_summary', '')}")
+
+    # 배당 히스토리 수집 (3년)
+    print("  배당 히스토리 수집 중...")
+    for stock in analyzed:
+        div = _fetch_dividend_history(stock.get("code", ""), market="us")
+        if div:
+            stock.update(div)
+            print(f"    {stock['name']}: {div.get('dividend_history', '')}")
 
     # 미국주 투자 추적 업데이트
     _update_tracking(analyzed, "api/data/track_us.json", market="us")

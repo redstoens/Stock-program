@@ -721,6 +721,11 @@
               <div class="lbl">외국인·기관 수급</div>
               <div class="val">${s.foreign_trend || '-'}</div>
             </div>
+            ${s.dividend_history ? `
+            <div class="info-item" style="grid-column:1/-1">
+              <div class="lbl">3년 배당 히스토리</div>
+              <div class="val" style="font-family:monospace;font-size:0.9em">${s.dividend_history}</div>
+            </div>` : ''}
           </div>
 
           ${barHtml}
