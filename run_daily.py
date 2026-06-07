@@ -56,58 +56,22 @@ def _get_dart_corp_map() -> dict[str, str]:
         return {}
 
 
-def _fetch_dart_indicators(stock_code: str, corp_map: dict) -> dict:
-    """DART 사업보고서에서 ROE·영업이익률·부채비율 조회 (최신 연도 기준)."""
+def _fetch_dart_all(stock_code: str, corp_map: dict) -> tuple[dict, dict]:
+    """DART에서 현재 지표 + 3년 트렌드를 한번에 조회 (API 호출 최소화).
+
+    Returns:
+        indicators: {roe, operating_margin, debt_ratio} — 최신 연도 기준
+        trend:      {year: {roe, om}} — 2022·2023·2024
+    """
     corp_code = corp_map.get(stock_code)
     if not corp_code:
-        return {}
+        return {}, {}
 
-    classes = {
-        "M210000": {"자기자본이익률": "roe", "매출액영업이익률": "operating_margin"},
-        "M220000": {"부채비율": "debt_ratio"},
-    }
-    result = {}
-    for year in ("2024", "2023"):
-        for idx_cl_code, field_map in classes.items():
-            try:
-                r = requests.get(
-                    "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
-                    params={
-                        "crtfc_key": DART_KEY,
-                        "corp_code": corp_code,
-                        "bsns_year": year,
-                        "reprt_code": "11011",
-                        "idx_cl_code": idx_cl_code,
-                    },
-                    timeout=15,
-                )
-                data = r.json()
-                if data.get("status") != "000":
-                    continue
-                for item in data.get("list", []):
-                    nm = item.get("idx_nm", "")
-                    for dart_nm, field in field_map.items():
-                        if dart_nm in nm and field not in result:
-                            val = item.get("idx_val", "").replace(",", "")
-                            try:
-                                result[field] = str(round(float(val), 1))
-                            except Exception:
-                                pass
-            except Exception:
-                continue
-        if result:
-            break
-    return result
-
-
-def _fetch_dart_trend(stock_code: str, corp_map: dict) -> dict:
-    """DART에서 3년(2022·2023·2024) 수익성 트렌드 조회."""
-    corp_code = corp_map.get(stock_code)
-    if not corp_code:
-        return {}
-
+    indicators = {}
     trend = {}
-    for year in ("2022", "2023", "2024"):
+
+    # ── 수익성 지표 (M210000) — 3년 전부 조회 ──────────────────
+    for year in ("2024", "2023", "2022"):
         try:
             r = requests.get(
                 "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
@@ -118,27 +82,69 @@ def _fetch_dart_trend(stock_code: str, corp_map: dict) -> dict:
                     "reprt_code": "11011",
                     "idx_cl_code": "M210000",
                 },
-                timeout=10,
+                timeout=15,
             )
             data = r.json()
             if data.get("status") != "000":
                 continue
-            year_data = {}
+            roe, om = None, None
             for item in data.get("list", []):
                 nm = item.get("idx_nm", "")
                 val = item.get("idx_val", "").replace(",", "")
                 try:
                     if "자기자본이익률" in nm:
-                        year_data["roe"] = round(float(val), 1)
+                        roe = round(float(val), 1)
                     elif "매출액영업이익률" in nm:
-                        year_data["om"] = round(float(val), 1)
+                        om = round(float(val), 1)
                 except Exception:
                     pass
-            if year_data:
-                trend[year] = year_data
+            # 최신 연도 값을 indicators에 저장 (처음 성공한 값)
+            if roe is not None and "roe" not in indicators:
+                indicators["roe"] = str(roe)
+            if om is not None and "operating_margin" not in indicators:
+                indicators["operating_margin"] = str(om)
+            # 3년 트렌드에 저장
+            if roe is not None or om is not None:
+                trend[year] = {}
+                if roe is not None:
+                    trend[year]["roe"] = roe
+                if om is not None:
+                    trend[year]["om"] = om
         except Exception:
             continue
-    return trend
+
+    # ── 안정성 지표 (M220000) — 최신 연도만 ────────────────────
+    for year in ("2024", "2023"):
+        if "debt_ratio" in indicators:
+            break
+        try:
+            r = requests.get(
+                "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
+                params={
+                    "crtfc_key": DART_KEY,
+                    "corp_code": corp_code,
+                    "bsns_year": year,
+                    "reprt_code": "11011",
+                    "idx_cl_code": "M220000",
+                },
+                timeout=15,
+            )
+            data = r.json()
+            if data.get("status") != "000":
+                continue
+            for item in data.get("list", []):
+                nm = item.get("idx_nm", "")
+                val = item.get("idx_val", "").replace(",", "")
+                if "부채비율" in nm:
+                    try:
+                        indicators["debt_ratio"] = str(round(float(val), 1))
+                        break
+                    except Exception:
+                        pass
+        except Exception:
+            continue
+
+    return indicators, trend
 
 
 def _format_trend_str(trend: dict) -> str:
@@ -252,30 +258,31 @@ def run_korean() -> dict:
         stock.update(detail)
 
     corp_map = {}
+    trend_map = {}
     if DART_KEY:
         corp_map = _get_dart_corp_map()
 
-        # DART 공식 지표 (ROE·영업이익률·부채비율)
-        print("  DART 지표 수집 중...")
+        # DART 공식 지표 + 3년 트렌드 (한번에 조회)
+        print("  DART 지표 + 3년 트렌드 수집 중...")
         for stock in analyzed:
-            indicators = _fetch_dart_indicators(stock.get("code", ""), corp_map)
+            indicators, trend = _fetch_dart_all(stock.get("code", ""), corp_map)
             if indicators:
                 stock.update(indicators)
-                print(f"    {stock['name']}: ROE={indicators.get('roe','N/A')}% "
-                      f"영업이익률={indicators.get('operating_margin','N/A')}% "
-                      f"부채비율={indicators.get('debt_ratio','N/A')}%")
+            trend_map[stock.get("code", "")] = trend
+            print(f"    {stock['name']}: ROE={indicators.get('roe','N/A')}% "
+                  f"영업이익률={indicators.get('operating_margin','N/A')}% "
+                  f"부채비율={indicators.get('debt_ratio','N/A')}% "
+                  f"트렌드={list(trend.keys())}")
     else:
         print("  DART_API_KEY 없음 — yfinance 데이터 사용")
 
-    # 뉴스 + 3년 트렌드 수집
-    print("  뉴스 및 3년 트렌드 수집 중...")
-    news_map, trend_map = {}, {}
+    # 뉴스 수집
+    print("  뉴스 수집 중...")
+    news_map = {}
     for stock in analyzed:
         code = stock.get("code", "")
         name = stock.get("name", "")
         news_map[code] = _fetch_news(name)
-        if corp_map:
-            trend_map[code] = _fetch_dart_trend(code, corp_map)
         print(f"    {name}: 뉴스 {len(news_map[code])}건")
 
     # 2차 AI 분석 (뉴스 + 트렌드 반영)
