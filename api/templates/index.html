@@ -104,6 +104,19 @@
     .section-header .sh-desc { font-size: 0.8rem; color: #718096; }
     .stock-card.short { border-left-color: #f6ad55; }
     .stock-card.long  { border-left-color: #4299e1; }
+
+    /* ── 종합 매수 점수 뱃지 ── */
+    .stock-header { justify-content: space-between; }
+    .stock-header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .buy-score-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .bs-num { font-size: 1.25rem; font-weight: 800; line-height: 1; }
+    .bs-lbl { font-size: 0.58rem; font-weight: 700; margin-top: 0.1rem; letter-spacing: -0.02em; }
+    .score-strong-buy { background: linear-gradient(135deg,#276749,#38a169); color: white; }
+    .score-buy        { background: linear-gradient(135deg,#2f855a,#68d391); color: white; }
+    .score-neutral    { background: linear-gradient(135deg,#d69e2e,#f6e05e); color: #744210; }
+    .score-watch      { background: linear-gradient(135deg,#c05621,#ed8936); color: white; }
+    .score-avoid      { background: linear-gradient(135deg,#9b2c2c,#e53e3e); color: white; }
+
     .horizon-bar { display: flex; align-items: center; gap: 0.5rem; background: #f7fafc; border-radius: 8px; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; border: 1px solid #e2e8f0; font-size: 0.84rem; }
     .horizon-bar .h-period { font-weight: 700; color: #2d3748; }
     .horizon-bar .h-reason { color: #718096; }
@@ -652,6 +665,20 @@
       const trendKey = (s.earnings_trend || '').split(' ')[0];
       const trendIcon = TREND_ICON[trendKey] || '';
 
+      // 종합 매수 점수 뱃지
+      const scoreVal = s.buy_score;
+      const scoreLbl = s.buy_score_label || '';
+      const scoreCls = scoreVal >= 75 ? 'score-strong-buy'
+                     : scoreVal >= 60 ? 'score-buy'
+                     : scoreVal >= 40 ? 'score-neutral'
+                     : scoreVal >= 25 ? 'score-watch'
+                     : 'score-avoid';
+      const scoreBadge = scoreVal != null ? `
+        <div class="buy-score-badge ${scoreCls}">
+          <div class="bs-num">${scoreVal}</div>
+          <div class="bs-lbl">${scoreLbl}</div>
+        </div>` : '';
+
       // 52주 바 위치 계산
       let barHtml = '';
       try {
@@ -678,11 +705,14 @@
       container.innerHTML += `
         <div class="stock-card ${isShort ? 'short' : 'long'}">
           <div class="stock-header">
-            <div class="stock-num">${i + 1}</div>
-            <div>
-              <span class="stock-name">${s.name}</span>
-              <span class="stock-code">(${s.code})</span>
+            <div class="stock-header-left">
+              <div class="stock-num">${i + 1}</div>
+              <div>
+                <span class="stock-name">${s.name}</span>
+                <span class="stock-code">(${s.code})</span>
+              </div>
             </div>
+            ${scoreBadge}
           </div>
 
           <div class="badge-row">

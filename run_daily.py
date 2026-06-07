@@ -165,6 +165,115 @@ def _format_trend_str(trend: dict) -> str:
     return " → ".join(parts) if parts else "데이터 없음"
 
 
+# ── 종합 매수 점수 ───────────────────────────────────────────
+
+def _calculate_buy_score(stock: dict, market: str = "kr") -> dict:
+    """재무·기술·수급·트렌드를 종합해 0~100점 매수 점수 계산.
+
+    KR: 재무30 + 기술30 + 수급20 + 실적·리스크20
+    US: 밸류에이션30 + 기술30 + 수급20 + 실적·리스크20
+    """
+    score = 0
+
+    # ── 1. 재무 건전성 / 밸류에이션 (30점) ──────────────────────
+    if market == "kr":
+        # ROE (15점)
+        try:
+            roe = float(stock.get("roe") or 0)
+            pts = 15 if roe >= 15 else 11 if roe >= 10 else 7 if roe >= 5 else 3 if roe > 0 else 0
+        except Exception:
+            pts = 0
+        score += pts
+
+        # 영업이익률 (10점)
+        try:
+            om = float(stock.get("operating_margin") or 0)
+            pts = 10 if om >= 15 else 8 if om >= 10 else 5 if om >= 5 else 2 if om > 0 else 0
+        except Exception:
+            pts = 0
+        score += pts
+
+        # 부채비율 (5점) — 낮을수록 좋음
+        try:
+            dr = float(stock.get("debt_ratio") or 0)
+            pts = (5 if dr <= 50 else 3 if dr <= 100 else 1 if dr <= 200 else 0) if dr > 0 else 3
+        except Exception:
+            pts = 3
+        score += pts
+    else:
+        # US: PER (20점) + ROE가 있으면 보너스 (10점)
+        per_str = str(stock.get("per") or "")
+        try:
+            per = float(per_str.replace(",", ""))
+            pts = 20 if 0 < per <= 15 else 16 if per <= 25 else 10 if per <= 35 else 5 if per <= 50 else 2
+        except Exception:
+            pts = 8  # N/A → 중립
+        score += pts
+
+        try:
+            roe = float(stock.get("roe") or 0)
+            pts = 10 if roe >= 15 else 7 if roe >= 10 else 4 if roe >= 5 else 2 if roe > 0 else 0
+        except Exception:
+            pts = 3
+        score += pts
+
+    # ── 2. 기술적 지표 (30점) ────────────────────────────────────
+    # RSI (15점)
+    try:
+        rsi = float(stock.get("rsi") or -1)
+        if rsi < 0:       pts = 7   # 데이터 없음
+        elif rsi <= 30:   pts = 9   # 과매도 — 반등 기대, 다소 위험
+        elif rsi <= 45:   pts = 15  # 매수 적정 구간
+        elif rsi <= 60:   pts = 10  # 중립
+        elif rsi <= 70:   pts = 4   # 과매수 근접
+        else:             pts = 0   # 과매수
+    except Exception:
+        pts = 7
+    score += pts
+
+    # MA 신호 (10점)
+    ma_sig = stock.get("ma_signal", "")
+    if "정배열" in ma_sig:     pts = 10
+    elif "단기상승" in ma_sig: pts = 7
+    elif "혼조" in ma_sig:     pts = 5
+    elif "단기하락" in ma_sig: pts = 3
+    elif "역배열" in ma_sig:   pts = 0
+    else:                      pts = 5
+    score += pts
+
+    # MACD (5점)
+    macd_sig = stock.get("macd_signal", "")
+    pts = 5 if "골든" in macd_sig else 0 if "데드" in macd_sig else 3
+    score += pts
+
+    # ── 3. 수급 동향 (20점) ──────────────────────────────────────
+    ft = stock.get("foreign_trend", "")
+    # 외국인 (10점)
+    f_pts = 10 if ("외국인" in ft and "순매수" in ft) else 0 if ("외국인" in ft and "순매도" in ft) else 5
+    # 기관 (10점)
+    i_pts = 10 if ("기관" in ft and "순매수" in ft) else 0 if ("기관" in ft and "순매도" in ft) else 5
+    score += f_pts + i_pts
+
+    # ── 4. 실적 트렌드 + 리스크 (20점) ──────────────────────────
+    et = stock.get("earnings_trend", "")
+    pts = 12 if "개선" in et else 6 if "보합" in et else 0 if "악화" in et else 5
+    score += pts
+
+    rl = stock.get("risk_level", "")
+    pts = 8 if rl == "하" else 4 if rl == "중" else 0 if rl == "상" else 4
+    score += pts
+
+    score = max(0, min(100, score))
+
+    if score >= 75:   label = "강력매수"
+    elif score >= 60: label = "매수고려"
+    elif score >= 40: label = "중립"
+    elif score >= 25: label = "관망"
+    else:             label = "매수비추"
+
+    return {"buy_score": score, "buy_score_label": label}
+
+
 # ── 투자 검증 추적 ────────────────────────────────────────────
 
 def _parse_price_raw(price_str: str) -> float:
@@ -552,6 +661,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
         if stocks:
             # Gemini가 덮어쓰면 안 되는 필드 원본값으로 복원
             _PRESERVE = {
+                "buy_score", "buy_score_label",
                 "earnings_trend", "trend_summary",
                 "roe", "operating_margin", "debt_ratio",
                 "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
@@ -646,6 +756,12 @@ def run_korean() -> dict:
             stock["foreign_trend"] = trend
             print(f"    {stock['name']}: {trend}")
 
+    # 종합 매수 점수 계산
+    print("  종합 매수 점수 계산 중...")
+    for stock in analyzed:
+        stock.update(_calculate_buy_score(stock, market="kr"))
+        print(f"    {stock['name']}: {stock['buy_score']}점 ({stock['buy_score_label']})")
+
     overlaps = compare_with_previous(analyzed, prev_report)
     save_report(analyzed)
 
@@ -693,6 +809,12 @@ def run_us() -> dict:
         if div:
             stock.update(div)
             print(f"    {stock['name']}: {div.get('dividend_history', '')}")
+
+    # 종합 매수 점수 계산
+    print("  종합 매수 점수 계산 중...")
+    for stock in analyzed:
+        stock.update(_calculate_buy_score(stock, market="us"))
+        print(f"    {stock['name']}: {stock['buy_score']}점 ({stock['buy_score_label']})")
 
     # 미국주 투자 추적 업데이트
     _update_tracking(analyzed, "api/data/track_us.json", market="us")
