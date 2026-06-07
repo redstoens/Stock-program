@@ -399,6 +399,26 @@
       "exit_date": null,
       "exit_price": null,
       "exit_return_pct": null
+    },
+    {
+      "rec_date": "2026-06-07",
+      "code": "001040",
+      "name": "CJ Corporation",
+      "entry_price": 183800,
+      "target_price_raw": 200000.0,
+      "stop_loss_raw": 175000.0,
+      "target_str": "200,000원",
+      "stop_loss_str": "175,000원 (현재가 대비 -4.8%)",
+      "investment_horizon": "단기",
+      "hold_period": "1~2개월",
+      "max_days": 60,
+      "status": "진행중",
+      "current_price": 183800.0,
+      "current_return_pct": 0.0,
+      "last_updated": "2026-06-07",
+      "exit_date": null,
+      "exit_price": null,
+      "exit_return_pct": null
     }
   ],
   "benchmark": {
