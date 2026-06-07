@@ -740,7 +740,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
                 "dividend_history",
                 "future_target", "stop_loss", "investment_horizon",
                 "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
-                "pbr",
+                "pbr", "sector",
             }
             orig_by_code = {s.get("code"): s for s in analyzed}
             for s in stocks:
@@ -873,6 +873,7 @@ def run_us() -> dict:
             stock.setdefault("week52_low", raw.get("week52_low", ""))
             stock.setdefault("week52_pct_from_high", raw.get("week52_pct_from_high", ""))
             stock.setdefault("pbr", raw.get("pbr", "N/A"))
+            stock.setdefault("sector", raw.get("sector", ""))
 
     # 기술적 지표 수집 (RSI · 이동평균 · MACD)
     print("  기술적 지표 수집 중...")
