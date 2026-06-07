@@ -224,6 +224,60 @@ def _fetch_current_price(code: str, market: str = "kr") -> float:
     return 0.0
 
 
+def _fetch_technical_indicators(code: str) -> dict:
+    """yfinance로 RSI(14)·이동평균(20/60일)·MACD(12,26,9) 계산 (국내주 전용)."""
+    try:
+        closes = None
+        for suffix in (".KS", ".KQ"):
+            hist = yf.Ticker(f"{code}{suffix}").history(period="4mo")
+            if not hist.empty and len(hist) >= 20:
+                closes = hist["Close"]
+                break
+        if closes is None:
+            return {}
+
+        current = float(closes.iloc[-1])
+
+        # RSI(14)
+        delta = closes.diff()
+        gain  = delta.clip(lower=0).rolling(14).mean()
+        loss  = (-delta.clip(upper=0)).rolling(14).mean()
+        rsi   = round(float((100 - 100 / (1 + gain / loss)).iloc[-1]), 1)
+        rsi_sig = "과매수" if rsi >= 70 else "과매도" if rsi <= 30 else "중립"
+
+        # 이동평균
+        ma20 = float(closes.rolling(20).mean().iloc[-1])
+        ma60 = float(closes.rolling(60).mean().iloc[-1]) if len(closes) >= 60 else None
+
+        if ma60:
+            ma_sig = "정배열" if current > ma20 > ma60 else \
+                     "역배열" if current < ma20 < ma60 else "혼조"
+        else:
+            ma_sig = "단기상승" if current > ma20 else "단기하락"
+
+        # MACD(12, 26, 9)
+        ema12  = closes.ewm(span=12, adjust=False).mean()
+        ema26  = closes.ewm(span=26, adjust=False).mean()
+        macd_l = ema12 - ema26
+        sig_l  = macd_l.ewm(span=9, adjust=False).mean()
+        hist_v = float((macd_l - sig_l).iloc[-1])
+        macd_sig = "골든크로스" if hist_v > 0 else "데드크로스"
+
+        return {
+            "rsi":         str(rsi),
+            "rsi_signal":  rsi_sig,
+            "ma20":        f"{int(ma20):,}",
+            "ma60":        f"{int(ma60):,}" if ma60 else "N/A",
+            "ma_signal":   ma_sig,
+            "macd_hist":   str(round(hist_v, 1)),
+            "macd_signal": macd_sig,
+            "tech_summary": f"RSI {rsi}({rsi_sig}) / MA {ma_sig} / MACD {macd_sig}",
+        }
+    except Exception as e:
+        print(f"    기술적 지표 실패 ({code}): {e}")
+        return {}
+
+
 def _fetch_investor_trend(code: str) -> str:
     """pykrx로 외국인·기관 순매수 추이 조회 (최근 1개월, 국내주 전용)."""
     try:
@@ -405,13 +459,15 @@ def _refine_with_context(analyzed: list[dict],
         trend = trend_map.get(code, {})
         news_str = " / ".join(news) if news else "뉴스 없음"
         trend_str = _format_trend_str(trend)
+        tech_str = stock.get("tech_summary", "")
         context_blocks.append(
             f"[{name} ({code})]\n"
             f"최신 뉴스: {news_str}\n"
             f"3년 재무 트렌드: {trend_str}"
+            + (f"\n기술적 지표: {tech_str}" if tech_str else "")
         )
 
-    prompt = f"""아래는 AI가 선정한 10개 한국 주식 종목과 각 종목의 실제 최신 뉴스 및 3년 재무 트렌드입니다.
+    prompt = f"""아래는 AI가 선정한 10개 한국 주식 종목과 각 종목의 실제 최신 뉴스, 3년 재무 트렌드, 기술적 지표입니다.
 
 === 종목별 실제 데이터 ===
 {chr(10).join(context_blocks)}
@@ -421,11 +477,11 @@ def _refine_with_context(analyzed: list[dict],
 
 위 실제 데이터를 반영해 각 종목의 분석을 보강하세요:
 1. news_summary → 실제 뉴스 헤드라인을 반영해 업데이트 (1-2문장)
-2. reason → 3년 재무 트렌드(ROE·영업이익률 개선/악화 여부) 반영해 보강
+2. reason → 3년 재무 트렌드 + 기술적 지표(RSI·MA·MACD 신호) 반영해 보강
 3. trend_summary → "YYYY→YYYY→YYYY 영업이익률/ROE 흐름" 한 줄 요약 (신규 필드)
 4. earnings_trend → 실제 3년 데이터 기반으로 재평가
 
-future_target, stop_loss, investment_horizon 등 나머지 필드는 그대로 유지하세요.
+future_target, stop_loss, investment_horizon, rsi, ma_signal, macd_signal 등 나머지 필드는 그대로 유지하세요.
 
 JSON만 반환하세요 (다른 텍스트 없이):
 {{"stocks": [보강된 10개 종목]}}"""
@@ -491,6 +547,14 @@ def run_korean() -> dict:
         name = stock.get("name", "")
         news_map[code] = _fetch_news(name)
         print(f"    {name}: 뉴스 {len(news_map[code])}건")
+
+    # 기술적 지표 수집 (RSI · 이동평균 · MACD)
+    print("  기술적 지표 수집 중...")
+    for stock in analyzed:
+        tech = _fetch_technical_indicators(stock.get("code", ""))
+        if tech:
+            stock.update(tech)
+            print(f"    {stock['name']}: {tech.get('tech_summary', '')}")
 
     # 2차 AI 분석 (뉴스 + 트렌드 반영)
     print("  2차 AI 분석 (뉴스·트렌드 반영) 중...")

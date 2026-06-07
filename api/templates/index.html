@@ -183,6 +183,27 @@
     .sim-updated { font-size: 0.7rem; color: #a0aec0; margin-top: 1rem; text-align: right; }
     .sim-empty { text-align: center; padding: 2rem 1rem; color: #a0aec0; font-size: 0.88rem; }
 
+    /* ── 기술적 분석 ── */
+    .tech-section { margin-bottom: 0.85rem; }
+    .rsi-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: #718096; margin-bottom: 0.3rem; }
+    .rsi-header b { font-size: 0.9rem; color: #2d3748; }
+    .rsi-badge { display: inline-block; padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700; margin-left: 0.25rem; }
+    .rsi-과매수 { background: #fff0e0; color: #c05621; }
+    .rsi-과매도 { background: #fff5f5; color: #c53030; }
+    .rsi-중립   { background: #f0fff4; color: #276749; }
+    .rsi-track { position: relative; height: 7px; border-radius: 4px; margin: 0.25rem 0 0.5rem;
+      background: linear-gradient(to right, #fc8181 0%,#fc8181 30%,#e2e8f0 30%,#e2e8f0 70%,#f6ad55 70%,#f6ad55 100%); }
+    .rsi-dot { position: absolute; top: 50%; width: 13px; height: 13px; background: #2b6cb0;
+      border: 2px solid white; border-radius: 50%; transform: translate(-50%,-50%); box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+    .rsi-zone-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: #a0aec0; margin-bottom: 0.55rem; }
+    .tech-badge-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .tech-badge { padding: 0.22rem 0.65rem; border-radius: 6px; font-size: 0.76rem; background: #f7fafc; border: 1px solid #e2e8f0; color: #4a5568; }
+    .tech-badge.macd-golden { background: #f0fff4; border-color: #9ae6b4; color: #276749; font-weight: 700; }
+    .tech-badge.macd-dead   { background: #fff5f5; border-color: #feb2b2; color: #c53030; font-weight: 700; }
+    .tech-badge.ma-bull  { background: #ebf8ff; border-color: #bee3f8; color: #2b6cb0; font-weight: 700; }
+    .tech-badge.ma-bear  { background: #fff5f5; border-color: #feb2b2; color: #c53030; font-weight: 700; }
+    .tech-badge.ma-mixed { background: #fffbeb; border-color: #f6e05e; color: #744210; font-weight: 700; }
+
     /* ── 검증 탭 내 시장 서브탭 ── */
     .verify-market-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; }
     .vmt-btn { flex: 1; padding: 0.6rem; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; }
@@ -703,6 +724,31 @@
           </div>
 
           ${barHtml}
+
+          ${s.rsi ? (() => {
+            const rsi = parseFloat(s.rsi);
+            const rsiCls = s.rsi_signal === '과매수' ? 'rsi-과매수' : s.rsi_signal === '과매도' ? 'rsi-과매도' : 'rsi-중립';
+            const maSig = s.ma_signal || '';
+            const maCls = maSig === '정배열' ? 'ma-bull' : maSig === '역배열' ? 'ma-bear' : 'ma-mixed';
+            const macdCls = (s.macd_signal || '').includes('골든') ? 'macd-golden' : 'macd-dead';
+            const ma20Str = s.ma20 ? `MA20 ${s.ma20}원` : '';
+            const ma60Str = s.ma60 && s.ma60 !== 'N/A' ? `MA60 ${s.ma60}원` : '';
+            return `<div class="tech-section">
+              <div class="section-lbl">기술적 분석</div>
+              <div class="rsi-header">
+                <span style="color:#c53030">과매도 ≤30</span>
+                <span>RSI(14) <b>${s.rsi}</b><span class="rsi-badge ${rsiCls}">${s.rsi_signal}</span></span>
+                <span style="color:#c05621">과매수 ≥70</span>
+              </div>
+              <div class="rsi-track"><div class="rsi-dot" style="left:${Math.min(100,Math.max(0,rsi))}%"></div></div>
+              <div class="tech-badge-row">
+                ${maSig ? `<span class="tech-badge ${maCls}">${maSig === '정배열' ? '📈' : maSig === '역배열' ? '📉' : '➡️'} 이동평균 ${maSig}</span>` : ''}
+                ${s.macd_signal ? `<span class="tech-badge ${macdCls}">MACD ${s.macd_signal}</span>` : ''}
+                ${ma20Str ? `<span class="tech-badge">${ma20Str}</span>` : ''}
+                ${ma60Str ? `<span class="tech-badge">${ma60Str}</span>` : ''}
+              </div>
+            </div>`;
+          })() : ''}
 
           <div class="section-block">
             <div class="section-lbl">선정 이유</div>
