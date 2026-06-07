@@ -224,15 +224,19 @@ def _fetch_current_price(code: str, market: str = "kr") -> float:
     return 0.0
 
 
-def _fetch_technical_indicators(code: str) -> dict:
-    """yfinance로 RSI(14)·이동평균(20/60일)·MACD(12,26,9) 계산 (국내주 전용)."""
+def _fetch_technical_indicators(code: str, market: str = "kr") -> dict:
+    """yfinance로 RSI(14)·이동평균(20/60일)·MACD(12,26,9) 계산."""
     try:
-        closes = None
-        for suffix in (".KS", ".KQ"):
-            hist = yf.Ticker(f"{code}{suffix}").history(period="4mo")
-            if not hist.empty and len(hist) >= 20:
-                closes = hist["Close"]
-                break
+        if market == "us":
+            hist = yf.Ticker(code).history(period="4mo")
+            closes = hist["Close"] if not hist.empty and len(hist) >= 20 else None
+        else:
+            closes = None
+            for suffix in (".KS", ".KQ"):
+                hist = yf.Ticker(f"{code}{suffix}").history(period="4mo")
+                if not hist.empty and len(hist) >= 20:
+                    closes = hist["Close"]
+                    break
         if closes is None:
             return {}
 
@@ -263,11 +267,12 @@ def _fetch_technical_indicators(code: str) -> dict:
         hist_v = float((macd_l - sig_l).iloc[-1])
         macd_sig = "골든크로스" if hist_v > 0 else "데드크로스"
 
+        fmt = (lambda p: f"${p:.2f}") if market == "us" else (lambda p: f"{int(p):,}")
         return {
             "rsi":         str(rsi),
             "rsi_signal":  rsi_sig,
-            "ma20":        f"{int(ma20):,}",
-            "ma60":        f"{int(ma60):,}" if ma60 else "N/A",
+            "ma20":        fmt(ma20),
+            "ma60":        fmt(ma60) if ma60 else "N/A",
             "ma_signal":   ma_sig,
             "macd_hist":   str(round(hist_v, 1)),
             "macd_signal": macd_sig,
@@ -599,6 +604,14 @@ def run_us() -> dict:
             stock.setdefault("week52_high", raw.get("week52_high", ""))
             stock.setdefault("week52_low", raw.get("week52_low", ""))
             stock.setdefault("week52_pct_from_high", raw.get("week52_pct_from_high", ""))
+
+    # 기술적 지표 수집 (RSI · 이동평균 · MACD)
+    print("  기술적 지표 수집 중...")
+    for stock in analyzed:
+        tech = _fetch_technical_indicators(stock.get("code", ""), market="us")
+        if tech:
+            stock.update(tech)
+            print(f"    {stock['name']}: {tech.get('tech_summary', '')}")
 
     # 미국주 투자 추적 업데이트
     _update_tracking(analyzed, "api/data/track_us.json", market="us")
