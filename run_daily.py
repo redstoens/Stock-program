@@ -166,12 +166,19 @@ def _format_trend_str(trend: dict) -> str:
 
 # ── 투자 검증 추적 ────────────────────────────────────────────
 
-def _parse_price_raw(price_str: str) -> int:
-    """'400,000원' 또는 '290,000원 (현재가 대비 -11.8%)' → 400000."""
+def _parse_price_raw(price_str: str) -> float:
+    """가격 문자열에서 숫자 추출. '400,000원', '$250.50', '250달러' 등 지원."""
     if not price_str:
-        return 0
+        return 0.0
+    # 한국 원화: "400,000원"
     m = re.search(r"([\d,]+)원", price_str)
-    return int(m.group(1).replace(",", "")) if m else 0
+    if m:
+        return float(m.group(1).replace(",", ""))
+    # 달러: "$250.50" 또는 "250.50달러"
+    m = re.search(r"\$?([\d,]+\.?\d*)", price_str)
+    if m:
+        return float(m.group(1).replace(",", ""))
+    return 0.0
 
 
 def _hold_max_days(hold_period: str) -> int:
@@ -185,10 +192,11 @@ def _hold_max_days(hold_period: str) -> int:
     return max_n * 365 if "년" in hold_period else max_n * 30
 
 
-def _fetch_kospi_index() -> float:
-    """KOSPI 지수 현재값 조회 (^KS11)."""
+def _fetch_benchmark_index(market: str = "kr") -> float:
+    """벤치마크 지수 현재값 조회 (KOSPI 또는 S&P 500)."""
+    ticker = "^KS11" if market == "kr" else "^GSPC"
     try:
-        hist = yf.Ticker("^KS11").history(period="1d")
+        hist = yf.Ticker(ticker).history(period="1d")
         if not hist.empty:
             return round(float(hist["Close"].iloc[-1]), 2)
     except Exception:
@@ -196,20 +204,27 @@ def _fetch_kospi_index() -> float:
     return 0.0
 
 
-def _fetch_current_price(code: str) -> int:
-    """yfinance로 현재가 조회 (KS → KQ 순서로 시도)."""
+def _fetch_current_price(code: str, market: str = "kr") -> float:
+    """yfinance로 현재가 조회."""
+    if market == "us":
+        try:
+            info = yf.Ticker(code).info
+            price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+            return round(float(price), 2) if price else 0.0
+        except Exception:
+            return 0.0
     for suffix in (".KS", ".KQ"):
         try:
             info = yf.Ticker(f"{code}{suffix}").info
             price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
             if price:
-                return int(price)
+                return float(int(price))
         except Exception:
             pass
-    return 0
+    return 0.0
 
 
-def _update_tracking(analyzed: list[dict], track_path: str) -> None:
+def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") -> None:
     """추천 종목을 누적 추적하고 현재가 기반 수익률·상태를 업데이트."""
     try:
         with open(track_path, encoding="utf-8") as f:
@@ -223,7 +238,7 @@ def _update_tracking(analyzed: list[dict], track_path: str) -> None:
     today = date.today().isoformat()
 
     # KOSPI 현재값 저장 (진입 기준값 + current 모두 갱신)
-    kospi_now = _fetch_kospi_index()
+    kospi_now = _fetch_benchmark_index(market)
     if kospi_now:
         track["benchmark"]["current"] = kospi_now
         track["benchmark"]["updated"] = today
@@ -269,7 +284,7 @@ def _update_tracking(analyzed: list[dict], track_path: str) -> None:
     if active_codes:
         print(f"  추적 종목 현재가 조회 중 ({len(active_codes)}개)...")
         for code in active_codes:
-            price = _fetch_current_price(code)
+            price = _fetch_current_price(code, market)
             if price:
                 price_map[code] = price
 
@@ -472,6 +487,9 @@ def run_us() -> dict:
             stock.setdefault("week52_high", raw.get("week52_high", ""))
             stock.setdefault("week52_low", raw.get("week52_low", ""))
             stock.setdefault("week52_pct_from_high", raw.get("week52_pct_from_high", ""))
+
+    # 미국주 투자 추적 업데이트
+    _update_tracking(analyzed, "api/data/track_us.json", market="us")
 
     return {
         "success": True,

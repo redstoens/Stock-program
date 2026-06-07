@@ -182,6 +182,12 @@
     .sim-excess.neu { background: #f7fafc; color: #718096; }
     .sim-updated { font-size: 0.7rem; color: #a0aec0; margin-top: 1rem; text-align: right; }
     .sim-empty { text-align: center; padding: 2rem 1rem; color: #a0aec0; font-size: 0.88rem; }
+
+    /* ── 검증 탭 내 시장 서브탭 ── */
+    .verify-market-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; }
+    .vmt-btn { flex: 1; padding: 0.6rem; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; }
+    .vmt-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
+    .vmt-btn.active { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-color: transparent; }
   </style>
 </head>
 <body>
@@ -200,6 +206,10 @@
   </div>
 
   <div id="verify-section">
+    <div class="verify-market-tabs">
+      <button class="vmt-btn active" id="vmt-kr" onclick="switchVerifyMarket('kr')">🇰🇷 국내주 (KOSPI)</button>
+      <button class="vmt-btn" id="vmt-us" onclick="switchVerifyMarket('us')">🇺🇸 미국주 (S&P 500)</button>
+    </div>
     <div id="sim-section"></div>
     <div id="verify-summary-row" class="verify-summary"></div>
     <div id="verify-avg-bar" class="verify-avg" style="display:none"></div>
@@ -269,6 +279,7 @@
 <script>
   let reportMarkdown = '';
   let currentMarket = 'kr';
+  let currentVerifyMarket = 'kr';
   let verifyRecords = [];
 
   const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
@@ -291,6 +302,9 @@
     document.getElementById('history-section').innerHTML = '';
 
     if (isVerify) {
+      currentVerifyMarket = 'kr';
+      document.getElementById('vmt-kr').classList.add('active');
+      document.getElementById('vmt-us').classList.remove('active');
       loadVerifyData();
     } else {
       const placeholders = {
@@ -302,12 +316,24 @@
     }
   }
 
+  function switchVerifyMarket(market) {
+    currentVerifyMarket = market;
+    document.getElementById('vmt-kr').classList.toggle('active', market === 'kr');
+    document.getElementById('vmt-us').classList.toggle('active', market === 'us');
+    // 필터 초기화
+    document.querySelectorAll('.vf-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('vf-all').classList.add('active');
+    loadVerifyData();
+  }
+
   async function loadVerifyData() {
+    const endpoint = currentVerifyMarket === 'us' ? '/api/verify-us' : '/api/verify-kr';
     try {
-      const res = await fetch('/api/verify-kr');
+      const res = await fetch(endpoint);
       const data = await res.json();
       verifyRecords = (data.records || []).slice().reverse(); // 최신순
-      renderSimulation(verifyRecords, data.benchmark || {});
+      const benchLabel = currentVerifyMarket === 'us' ? 'S&P 500' : 'KOSPI';
+      renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
       renderVerify('all');
     } catch(e) {
       document.getElementById('verify-tbody').innerHTML =
@@ -315,7 +341,7 @@
     }
   }
 
-  function renderSimulation(records, benchmark) {
+  function renderSimulation(records, benchmark, benchLabel = 'KOSPI') {
     const sec = document.getElementById('sim-section');
     if (!records.length) {
       sec.innerHTML = '<div class="sim-card"><div class="sim-empty">GitHub Actions 실행 후 추적 데이터가 쌓이면 시뮬레이션이 표시됩니다.</div></div>';
@@ -373,7 +399,7 @@
         </div>
         <div class="sim-stat">
           <div class="sim-stat-val ${cls(avgKospi)}">${fmt(avgKospi)}</div>
-          <div class="sim-stat-lbl">KOSPI 평균</div>
+          <div class="sim-stat-lbl">${benchLabel} 평균</div>
         </div>
         <div class="sim-stat">
           <div class="sim-stat-val ${cls(avgExcess)}">${fmt(avgExcess)}</div>
@@ -400,7 +426,7 @@
           </div>
           ${b.kospiReturn !== null ? `
           <div class="sim-bar-row">
-            <span class="sim-bar-lbl">KOSPI</span>
+            <span class="sim-bar-lbl">${benchLabel}</span>
             <div class="sim-bar-bg"><div class="sim-bar-fill" style="width:${barW(b.kospiReturn)}%;background:${barColor(b.kospiReturn)}"></div></div>
             <span class="sim-bar-val ${cls(b.kospiReturn)}">${fmt(b.kospiReturn)}</span>
           </div>` : ''}
@@ -468,8 +494,12 @@
       const retPct = r.current_return_pct ?? 0;
       const sign   = retPct >= 0 ? '+' : '';
       const retCls = retPct > 0 ? 'pos' : retPct < 0 ? 'neg' : 'neu';
-      const curPrice = r.current_price ? Number(r.current_price).toLocaleString() + '원' : '-';
-      const entryPrice = r.entry_price ? Number(r.entry_price).toLocaleString() + '원' : '-';
+      const isUS = currentVerifyMarket === 'us';
+      const fmtPrice = (p) => !p ? '-' : isUS
+        ? '$' + Number(p).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+        : Number(p).toLocaleString() + '원';
+      const curPrice   = fmtPrice(r.current_price);
+      const entryPrice = fmtPrice(r.entry_price);
       const tgt  = r.target_str  || '-';
       const sl   = r.stop_loss_str ? r.stop_loss_str.split('(')[0].trim() : '-';
       const horiz = r.investment_horizon || r.hold_period || '-';

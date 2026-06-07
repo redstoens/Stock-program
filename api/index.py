@@ -38,7 +38,17 @@ def verify_kr():
         with open(path, encoding="utf-8") as f:
             return jsonify(json.load(f))
     except FileNotFoundError:
-        return jsonify({"records": []}), 200
+        return jsonify({"records": [], "benchmark": {}}), 200
+
+
+@app.route("/api/verify-us")
+def verify_us():
+    path = os.path.join(_HERE, "data", "track_us.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"records": [], "benchmark": {}}), 200
 
 
 @app.route("/api/cached-us")
