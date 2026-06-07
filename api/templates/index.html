@@ -86,6 +86,20 @@
     .price-box.stoploss .plbl { color: #c53030; }
     .price-box.stoploss .pval { color: #9b2c2c; }
 
+    /* ── 손절·목표 가격 범위 바 ── */
+    .price-range-wrap { margin-top: 0.75rem; padding: 0.75rem 1rem; background: #f7fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .prb-title { font-size: 0.7rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.55rem; }
+    .prb-track { position: relative; height: 10px; border-radius: 5px; background: linear-gradient(to right, #fc8181 0%, #f6e05e 40%, #68d391 100%); margin: 0.4rem 0; }
+    .prb-dot { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 16px; height: 16px; background: #2b6cb0; border: 2.5px solid white; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.25); }
+    .prb-end-labels { display: flex; justify-content: space-between; font-size: 0.7rem; margin-bottom: 0.1rem; }
+    .prb-stop-lbl { color: #c53030; font-weight: 700; }
+    .prb-target-lbl { color: #276749; font-weight: 700; }
+    .prb-dist-row { display: flex; justify-content: space-between; font-size: 0.72rem; margin-top: 0.45rem; }
+    .prb-dist-stop { color: #c53030; font-weight: 700; }
+    .prb-dist-cur { color: #4a5568; font-size: 0.68rem; text-align: center; }
+    .prb-dist-target { color: #276749; font-weight: 700; }
+    .prb-guide { margin-top: 0.5rem; padding-top: 0.45rem; border-top: 1px solid #e2e8f0; font-size: 0.7rem; color: #718096; line-height: 1.5; }
+
     /* 52주 바 */
     .week52-bar-wrap { margin: 0.75rem 0; }
     .week52-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #718096; margin-bottom: 0.25rem; }
@@ -847,6 +861,39 @@
               <div class="pval">${s.stop_loss || '-'}</div>
             </div>
           </div>
+          ${(() => {
+            const cur = s.current_price_raw || 0;
+            const parseP = str => { if (!str) return 0; const m = str.replace(/,/g,'').match(/[\d]+\.?\d*/); return m ? parseFloat(m[0]) : 0; };
+            const targetP = parseP(s.future_target);
+            const stopP   = parseP(s.stop_loss);
+            if (!cur || !targetP || !stopP || targetP <= stopP) return '';
+            const range = targetP - stopP;
+            const pos   = Math.min(98, Math.max(2, Math.round((cur - stopP) / range * 100)));
+            const toStop   = ((cur - stopP) / cur * 100).toFixed(1);
+            const toTarget = ((targetP - cur) / cur * 100).toFixed(1);
+            const isFmt = market === 'us';
+            const fmt = p => isFmt ? '$' + p.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}) : p.toLocaleString() + '원';
+            return `
+            <div class="price-range-wrap">
+              <div class="prb-title">현재가 위치</div>
+              <div class="prb-end-labels">
+                <span class="prb-stop-lbl">🛑 손절 ${fmt(stopP)}</span>
+                <span class="prb-target-lbl">🎯 목표 ${fmt(targetP)}</span>
+              </div>
+              <div class="prb-track">
+                <div class="prb-dot" style="left:${pos}%"></div>
+              </div>
+              <div class="prb-dist-row">
+                <span class="prb-dist-stop">손절까지 -${toStop}%</span>
+                <span class="prb-dist-cur">● 현재가</span>
+                <span class="prb-dist-target">목표까지 +${toTarget}%</span>
+              </div>
+              <div class="prb-guide">
+                ⚠️ <b>손절 기준가(${fmt(stopP)}) 이하로 내려가면 추가 손실을 막기 위해 매도를 고려하세요.</b><br>
+                이 가격은 핵심 지지선 기준으로 AI가 산정한 수치로, 실제 투자 결정은 본인 판단에 따라 이루어져야 합니다.
+              </div>
+            </div>`;
+          })()}
         </div>`;
     });
   }
