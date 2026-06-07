@@ -419,6 +419,26 @@
       "exit_date": null,
       "exit_price": null,
       "exit_return_pct": null
+    },
+    {
+      "rec_date": "2026-06-07",
+      "code": "HD",
+      "name": "Home Depot, Inc. (The)",
+      "entry_price": 310.78,
+      "target_price_raw": 335.0,
+      "stop_loss_raw": 290.0,
+      "target_str": "$335.00",
+      "stop_loss_str": "$290.00 (현재가 대비 -6.7%)",
+      "investment_horizon": "단기",
+      "hold_period": "1~2개월",
+      "max_days": 60,
+      "status": "진행중",
+      "current_price": 310.78,
+      "current_return_pct": 0.0,
+      "last_updated": "2026-06-07",
+      "exit_date": null,
+      "exit_price": null,
+      "exit_return_pct": null
     }
   ],
   "benchmark": {
