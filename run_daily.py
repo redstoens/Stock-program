@@ -687,7 +687,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
 
 def run_korean() -> dict:
     print("\n🇰🇷 한국 주식 분석 시작...")
-    stocks_raw = fetch_kospi_stocks(top_n=80)
+    stocks_raw = fetch_kospi_stocks(top_n=100)
     stock_table = format_for_prompt(stocks_raw)
 
     prev_report = load_previous_report()
@@ -780,7 +780,7 @@ def run_korean() -> dict:
 
 def run_us() -> dict:
     print("\n🇺🇸 미국 주식 분석 시작...")
-    stocks_raw = fetch_sp500_stocks(top_n=50)
+    stocks_raw = fetch_sp500_stocks(top_n=97)
     stock_table = format_for_prompt_us(stocks_raw)
     analyzed = analyze_stocks_us(stock_table, "")
 

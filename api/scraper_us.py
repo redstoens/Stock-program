@@ -2,12 +2,31 @@ import yfinance as yf
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SP500_TICKERS = [
+    # ── 빅테크 / AI ──────────────────────────────────────────────
     "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "BRK-B",
-    "TSLA", "AVGO", "JPM", "LLY", "V", "UNH", "XOM", "MA", "ORCL",
-    "COST", "HD", "PG", "JNJ", "ABBV", "WMT", "BAC", "KO", "MRK",
-    "NFLX", "CVX", "AMD", "CRM", "PEP", "TMO", "ACN", "LIN", "MCD",
-    "ABT", "TXN", "QCOM", "GE", "DHR", "WFC", "PM", "IBM", "AMGN",
-    "NEE", "RTX", "HON", "CAT", "SPGI", "GS", "BLK",
+    "TSLA", "AVGO", "ORCL", "ADBE", "NOW", "INTU", "PANW", "CSCO",
+    "INTC", "AMD", "TXN", "QCOM", "IBM", "ANET",
+    # ── 금융 ─────────────────────────────────────────────────────
+    "JPM", "V", "MA", "BAC", "WFC", "GS", "MS", "BLK", "SPGI",
+    "AXP", "C", "COF", "SCHW", "USB", "PNC",
+    # ── 헬스케어 / 제약 ──────────────────────────────────────────
+    "LLY", "UNH", "JNJ", "ABBV", "MRK", "ABT", "TMO", "DHR",
+    "ISRG", "BSX", "MDT", "REGN", "GILD", "SYK", "PFE", "AMGN",
+    "ELV", "ZTS",
+    # ── 소비재 / 유통 ─────────────────────────────────────────────
+    "WMT", "COST", "HD", "PG", "KO", "PEP", "MCD", "PM",
+    "TGT", "SBUX", "NKE", "CMG", "LOW",
+    # ── 에너지 ───────────────────────────────────────────────────
+    "XOM", "CVX", "COP", "SLB", "EOG", "PSX",
+    # ── 산업재 / 방산 ─────────────────────────────────────────────
+    "GE", "RTX", "HON", "CAT", "LMT", "BA", "UPS", "FDX", "DE",
+    "ACN", "ETN", "EMR",
+    # ── 통신 / 미디어 ─────────────────────────────────────────────
+    "NFLX", "CRM", "LIN",
+    # ── 유틸리티 / 리츠 ──────────────────────────────────────────
+    "NEE", "DUK", "SO", "AMT", "PLD", "EQIX",
+    # ── 플랫폼 / 기타 ─────────────────────────────────────────────
+    "PYPL", "UBER", "ABNB",
 ]
 
 
@@ -42,7 +61,7 @@ def _fetch_one(ticker_sym: str) -> dict | None:
         return None
 
 
-def fetch_sp500_stocks(top_n: int = 50) -> list[dict]:
+def fetch_sp500_stocks(top_n: int = 97) -> list[dict]:
     results = []
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = {executor.submit(_fetch_one, t): t for t in SP500_TICKERS[:top_n]}
