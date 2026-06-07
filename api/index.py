@@ -1,7 +1,10 @@
 import sys
 import os
-LIB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib")
-sys.path.insert(0, os.path.abspath(LIB_DIR))
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+sys.path.insert(0, os.path.join(_ROOT, "lib"))
+sys.path.insert(0, _HERE)
 
 from flask import Flask, request, jsonify, send_from_directory
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
