@@ -66,6 +66,15 @@
     .badge-risk-mid { background: #fffbeb; color: #744210; }
     .badge-risk-hi  { background: #fff5f5; color: #c53030; }
 
+    /* 매도·매수 신호 배지 */
+    .badge-signal { font-weight: 700; }
+    .sig-sell     { background: #fff5f5; color: #c53030; border: 1.5px solid #feb2b2; animation: sig-pulse 1.8s ease-in-out infinite; }
+    .sig-hot      { background: #fffaf0; color: #c05621; border: 1.5px solid #fbd38d; }
+    .sig-buy      { background: #f0fff4; color: #1a6840; border: 1.5px solid #9ae6b4; animation: sig-pulse-g 1.8s ease-in-out infinite; }
+    .sig-oversold { background: #ebf8ff; color: #2b6cb0; border: 1.5px solid #bee3f8; }
+    @keyframes sig-pulse   { 0%,100%{box-shadow:0 0 0 0 rgba(197,48,48,.35)} 50%{box-shadow:0 0 0 5px rgba(197,48,48,0)} }
+    @keyframes sig-pulse-g { 0%,100%{box-shadow:0 0 0 0 rgba(39,103,73,.3)}  50%{box-shadow:0 0 0 5px rgba(39,103,73,0)} }
+
     /* 정보 그리드 */
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
     .info-item { background: #f7fafc; border-radius: 8px; padding: 0.55rem 0.75rem; border: 1px solid #e2e8f0; }
@@ -754,6 +763,17 @@
               const cls = d >= 5 ? 'streak-hi' : d >= 4 ? 'streak-4' : d >= 3 ? 'streak-3' : 'streak-2';
               const icon = d >= 5 ? '🔥' : '🔁';
               return `<span class="badge badge-streak ${cls}">${icon} ${d}일 연속 추천</span>`;
+            })()}
+            ${(() => {
+              if (!s.rsi) return '';
+              const rsi = parseFloat(s.rsi);
+              const isDead   = (s.macd_signal || '').includes('데드');
+              const isGolden = (s.macd_signal || '').includes('골든');
+              if (rsi >= 70 && isDead)   return `<span class="badge badge-signal sig-sell">🚨 매도 주의</span>`;
+              if (rsi >= 70)             return `<span class="badge badge-signal sig-hot">⚠️ 과열 구간</span>`;
+              if (rsi <= 30 && isGolden) return `<span class="badge badge-signal sig-buy">⚡ 강한 매수 신호</span>`;
+              if (rsi <= 30)             return `<span class="badge badge-signal sig-oversold">📉 과매도 반등 주목</span>`;
+              return '';
             })()}
           </div>
           ${(s.hold_period || s.horizon_reason) ? `
