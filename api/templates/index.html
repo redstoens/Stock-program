@@ -216,6 +216,10 @@
     .tech-badge.ma-bull  { background: #ebf8ff; border-color: #bee3f8; color: #2b6cb0; font-weight: 700; }
     .tech-badge.ma-bear  { background: #fff5f5; border-color: #feb2b2; color: #c53030; font-weight: 700; }
     .tech-badge.ma-mixed { background: #fffbeb; border-color: #f6e05e; color: #744210; font-weight: 700; }
+    .tech-explain { margin-top: 0.65rem; padding: 0.55rem 0.7rem; background: #f8f9fa; border-radius: 7px; border: 1px solid #e9ecef; display: flex; flex-direction: column; gap: 0.3rem; }
+    .te-row { display: flex; gap: 0.45rem; font-size: 0.72rem; line-height: 1.45; align-items: baseline; }
+    .te-term { font-weight: 700; color: #4a5568; white-space: nowrap; min-width: 5.5rem; }
+    .te-desc { color: #718096; }
 
     /* ── 검증 탭 내 시장 서브탭 ── */
     .verify-market-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; }
@@ -768,6 +772,31 @@
             const macdCls = (s.macd_signal || '').includes('골든') ? 'macd-golden' : 'macd-dead';
             const ma20Str = s.ma20 ? `MA20 ${s.ma20}원` : '';
             const ma60Str = s.ma60 && s.ma60 !== 'N/A' ? `MA60 ${s.ma60}원` : '';
+            // 용어 설명 동적 생성
+            const explains = [];
+            // RSI
+            const rsiDesc = rsi <= 30 ? '30 이하 — 지나치게 많이 팔린 상태. 기술적 반등 가능성이 있지만 추세 확인 필요'
+                           : rsi >= 70 ? '70 이상 — 단기 과열 구간. 추가 상승보다 조정 가능성을 염두에 두세요'
+                           : `${rsi} — 정상 범위(30~70). 과열·침체 신호 없음`;
+            explains.push(['RSI(14)', rsiDesc]);
+            // MA
+            if (maSig === '정배열')    explains.push(['이동평균 정배열', '주가 > MA20 > MA60 순서. 단기·중기 추세가 모두 상승 방향으로 정렬된 강세 신호']);
+            else if (maSig === '역배열') explains.push(['이동평균 역배열', '주가 < MA20 < MA60 순서. 단기·중기 추세가 모두 하락 방향. 신규 매수 시 주의']);
+            else if (maSig === '혼조')   explains.push(['이동평균 혼조', 'MA20·MA60과 주가 관계가 일정하지 않음. 방향성이 불분명한 구간']);
+            else if (maSig)              explains.push(['이동평균', maSig === '단기상승' ? '주가가 MA20 위에 위치. 단기 상승세 (MA60 데이터 부족)' : '주가가 MA20 아래. 단기 하락 압력']);
+            // MACD
+            if ((s.macd_signal || '').includes('골든'))
+              explains.push(['MACD 골든크로스', 'MACD선이 시그널선을 위로 돌파. 단기 상승 모멘텀 발생 신호 — 매수 관심 구간']);
+            else if ((s.macd_signal || '').includes('데드'))
+              explains.push(['MACD 데드크로스', 'MACD선이 시그널선을 아래로 돌파. 단기 하락 압력 증가 신호 — 신규 매수 신중']);
+            // MA 가격선
+            if (s.ma20) explains.push(['MA20', `최근 20거래일 종가 평균(${s.ma20}). 단기 지지·저항선으로 활용`]);
+            if (s.ma60 && s.ma60 !== 'N/A') explains.push(['MA60', `최근 60거래일 종가 평균(${s.ma60}). 중기 추세 기준선`]);
+
+            const explainHtml = explains.map(([term, desc]) =>
+              `<div class="te-row"><span class="te-term">${term}</span><span class="te-desc">${desc}</span></div>`
+            ).join('');
+
             return `<div class="tech-section">
               <div class="section-lbl">기술적 분석</div>
               <div class="rsi-header">
@@ -782,6 +811,7 @@
                 ${ma20Str ? `<span class="tech-badge">${ma20Str}</span>` : ''}
                 ${ma60Str ? `<span class="tech-badge">${ma60Str}</span>` : ''}
               </div>
+              <div class="tech-explain">${explainHtml}</div>
             </div>`;
           })() : ''}
 
