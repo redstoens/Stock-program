@@ -179,11 +179,13 @@ def fetch_stock_detail(code: str) -> dict:
             w52_low = info.get("fiftyTwoWeekLow") or 0
             if cur_price and w52_high:
                 pct = round((cur_price - w52_high) / w52_high * 100, 1)
+                pbr_raw = info.get("priceToBook")
                 detail.update({
                     "current_price_raw": int(cur_price),
                     "week52_high": f"{int(w52_high):,}",
                     "week52_low": f"{int(w52_low):,}",
                     "week52_pct_from_high": f"{pct:+.1f}%",
+                    "pbr": str(round(pbr_raw, 2)) if pbr_raw and pbr_raw > 0 else "N/A",
                 })
                 break
         except Exception:

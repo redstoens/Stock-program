@@ -44,12 +44,14 @@ def _fetch_one(ticker_sym: str) -> dict | None:
 
         per_val = info.get("trailingPE") or info.get("forwardPE")
         roe_val = info.get("returnOnEquity")
+        pbr_val = info.get("priceToBook")
 
         return {
             "name": info.get("shortName") or info.get("longName") or ticker_sym,
             "code": ticker_sym,
             "per": round(per_val, 1) if per_val else "N/A",
             "roe": round(roe_val * 100, 1) if roe_val else "N/A",
+            "pbr": str(round(pbr_val, 2)) if pbr_val and pbr_val > 0 else "N/A",
             "market_cap": info.get("marketCap") or 0,
             "sector": info.get("sector") or "",
             "current_price_raw": round(current, 2),

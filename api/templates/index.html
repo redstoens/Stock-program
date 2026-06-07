@@ -782,6 +782,15 @@
               <div class="lbl">부채비율 (DART)</div>
               <div class="val">${s.debt_ratio}%</div>
             </div>` : ''}
+            ${s.pbr && s.pbr !== 'N/A' ? (() => {
+              const pbrNum = parseFloat(s.pbr);
+              const pbrLbl = pbrNum < 1 ? '저평가' : pbrNum < 2 ? '적정' : pbrNum < 3 ? '다소 고평가' : '고평가';
+              const pbrClr = pbrNum < 1 ? '#276749' : pbrNum < 2 ? '#2b6cb0' : pbrNum < 3 ? '#c05621' : '#c53030';
+              return `<div class="info-item">
+              <div class="lbl">PBR (주가순자산비율)</div>
+              <div class="val">${s.pbr}배 <span style="color:${pbrClr};font-size:0.8em;font-weight:700">${pbrLbl}</span></div>
+            </div>`;
+            })() : ''}
             <div class="info-item" style="grid-column:1/-1">
               <div class="lbl">외국인·기관 수급</div>
               <div class="val">${s.foreign_trend || '-'}</div>
