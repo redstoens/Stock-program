@@ -24,7 +24,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        run: pip install yfinance google-genai requests python-dotenv
+        run: pip install yfinance google-genai requests python-dotenv pykrx
 
       - name: Run analysis
         env:

@@ -224,6 +224,46 @@ def _fetch_current_price(code: str, market: str = "kr") -> float:
     return 0.0
 
 
+def _fetch_investor_trend(code: str) -> str:
+    """pykrx로 외국인·기관 순매수 추이 조회 (최근 1개월, 국내주 전용)."""
+    try:
+        from pykrx import stock as pk
+        from datetime import datetime, timedelta
+
+        today = datetime.today()
+        end_dt   = today.strftime("%Y%m%d")
+        start_dt = (today - timedelta(days=30)).strftime("%Y%m%d")
+
+        df = pk.get_market_trading_value_by_investor(start_dt, end_dt, code, detail=False)
+        if df is None or df.empty:
+            return ""
+
+        # 컬럼명은 pykrx 버전에 따라 "외국인" 또는 "외국인합계"
+        f_col = next((c for c in df.columns if "외국인" in c), None)
+        i_col = next((c for c in df.columns if "기관" in c), None)
+
+        def _fmt(net: int) -> str:
+            a = abs(net)
+            direction = "순매수" if net > 0 else "순매도"
+            if a >= 100_000_000_000:
+                return f"{direction} {a / 100_000_000_000:.1f}천억원"
+            if a >= 100_000_000:
+                return f"{direction} {a // 100_000_000}억원"
+            return f"{direction} {a // 10_000}만원"
+
+        parts = []
+        for col, label in [(f_col, "외국인"), (i_col, "기관")]:
+            if col is None:
+                continue
+            net = int(df[col].sum())
+            parts.append(f"{label} {_fmt(net)}")
+
+        return " / ".join(parts) + " (최근 1개월)" if parts else ""
+    except Exception as e:
+        print(f"    투자자 동향 실패 ({code}): {e}")
+        return ""
+
+
 def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") -> None:
     """추천 종목을 누적 추적하고 현재가 기반 수익률·상태를 업데이트."""
     try:
@@ -455,6 +495,14 @@ def run_korean() -> dict:
     # 2차 AI 분석 (뉴스 + 트렌드 반영)
     print("  2차 AI 분석 (뉴스·트렌드 반영) 중...")
     analyzed = _refine_with_context(analyzed, news_map, trend_map)
+
+    # 외국인·기관 수급 실데이터 덮어쓰기 (pykrx)
+    print("  외국인·기관 수급 수집 중...")
+    for stock in analyzed:
+        trend = _fetch_investor_trend(stock.get("code", ""))
+        if trend:
+            stock["foreign_trend"] = trend
+            print(f"    {stock['name']}: {trend}")
 
     overlaps = compare_with_previous(analyzed, prev_report)
     save_report(analyzed)
