@@ -359,6 +359,16 @@
               <div class="lbl">실적 트렌드</div>
               <div class="val">${trendIcon} ${s.earnings_trend || '-'}</div>
             </div>
+            ${s.operating_margin && s.operating_margin !== 'N/A' ? `
+            <div class="info-item">
+              <div class="lbl">영업이익률 (DART)</div>
+              <div class="val">${s.operating_margin}%</div>
+            </div>` : ''}
+            ${s.debt_ratio && s.debt_ratio !== 'N/A' ? `
+            <div class="info-item">
+              <div class="lbl">부채비율 (DART)</div>
+              <div class="val">${s.debt_ratio}%</div>
+            </div>` : ''}
             <div class="info-item" style="grid-column:1/-1">
               <div class="lbl">외국인·기관 수급</div>
               <div class="val">${s.foreign_trend || '-'}</div>

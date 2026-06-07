@@ -1,8 +1,9 @@
 from concurrent.futures import ThreadPoolExecutor
 import yfinance as yf
 
-# KOSPI 주요 종목 (시가총액 상위, .KS = KOSPI)
+# KOSPI + KOSDAQ 주요 종목 (.KS = KOSPI, .KQ = KOSDAQ)
 KOSPI_TICKERS = [
+    # ── KOSPI 시가총액 상위 ──────────────────────────────────
     "005930.KS",  # 삼성전자
     "000660.KS",  # SK하이닉스
     "207940.KS",  # 삼성바이오로직스
@@ -63,6 +64,48 @@ KOSPI_TICKERS = [
     "004370.KS",  # 농심
     "161390.KS",  # 한국타이어앤테크놀로지
     "042660.KS",  # 한화오션
+    # ── KOSPI 추가 종목 ──────────────────────────────────────
+    "005490.KS",  # POSCO홀딩스
+    "004020.KS",  # 현대제철
+    "036570.KS",  # 엔씨소프트
+    "009830.KS",  # 한화솔루션
+    "011780.KS",  # 금호석유화학
+    "023530.KS",  # 롯데쇼핑
+    "001040.KS",  # CJ
+    "000150.KS",  # 두산
+    "007310.KS",  # 오뚜기
+    "047050.KS",  # 포스코인터내셔널
+    "005940.KS",  # NH투자증권
+    "006800.KS",  # 미래에셋증권
+    "000120.KS",  # CJ대한통운
+    "011070.KS",  # LG이노텍
+    "016360.KS",  # 삼성증권
+    "071050.KS",  # 한국금융지주
+    "000880.KS",  # 한화
+    "069960.KS",  # 현대백화점
+    "006360.KS",  # GS건설
+    "051600.KS",  # 한전KPS
+    "030000.KS",  # 제일기획
+    "011170.KS",  # 롯데케미칼
+    "010060.KS",  # OCI홀딩스
+    "003600.KS",  # SK케미칼
+    "020560.KS",  # 아시아나항공
+    # ── KOSDAQ 주요 종목 ─────────────────────────────────────
+    "247540.KQ",  # 에코프로비엠
+    "086520.KQ",  # 에코프로
+    "196170.KQ",  # 알테오젠
+    "357780.KQ",  # 솔브레인
+    "066970.KQ",  # L&F
+    "022100.KQ",  # 포스코DX
+    "039030.KQ",  # 이오테크닉스
+    "145020.KQ",  # 휴젤
+    "214150.KQ",  # 클래시스
+    "293490.KQ",  # 카카오게임즈
+    "263750.KQ",  # 펄어비스
+    "328130.KQ",  # 루닛
+    "095340.KQ",  # ISC
+    "064760.KQ",  # 티씨케이
+    "131370.KQ",  # 엠아이텍
 ]
 
 
@@ -105,8 +148,8 @@ def _fetch_one(ticker_sym: str) -> dict | None:
 
 
 def fetch_kospi_stocks(top_n: int = 80) -> list[dict]:
-    """KOSPI 주요 종목 데이터 — yfinance."""
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    """KOSPI + KOSDAQ 주요 종목 데이터 — yfinance."""
+    with ThreadPoolExecutor(max_workers=10) as executor:
         results = list(executor.map(_fetch_one, KOSPI_TICKERS))
 
     stocks = [r for r in results if r is not None]
@@ -127,22 +170,24 @@ def fetch_stock_detail(code: str) -> dict:
         "week52_low": "N/A",
         "week52_pct_from_high": "N/A",
     }
-    try:
-        info = yf.Ticker(f"{code}.KS").info
-        cur_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
-        w52_high = info.get("fiftyTwoWeekHigh") or 0
-        w52_low = info.get("fiftyTwoWeekLow") or 0
-
-        if cur_price and w52_high:
-            pct = round((cur_price - w52_high) / w52_high * 100, 1)
-            detail.update({
-                "current_price_raw": int(cur_price),
-                "week52_high": f"{int(w52_high):,}",
-                "week52_low": f"{int(w52_low):,}",
-                "week52_pct_from_high": f"{pct:+.1f}%",
-            })
-    except Exception:
-        pass
+    # .KS 먼저 시도, 실패 시 .KQ
+    for suffix in (".KS", ".KQ"):
+        try:
+            info = yf.Ticker(f"{code}{suffix}").info
+            cur_price = info.get("currentPrice") or info.get("regularMarketPrice") or 0
+            w52_high = info.get("fiftyTwoWeekHigh") or 0
+            w52_low = info.get("fiftyTwoWeekLow") or 0
+            if cur_price and w52_high:
+                pct = round((cur_price - w52_high) / w52_high * 100, 1)
+                detail.update({
+                    "current_price_raw": int(cur_price),
+                    "week52_high": f"{int(w52_high):,}",
+                    "week52_low": f"{int(w52_low):,}",
+                    "week52_pct_from_high": f"{pct:+.1f}%",
+                })
+                break
+        except Exception:
+            continue
     return detail
 
 

@@ -47,35 +47,56 @@ def _get_dart_corp_map() -> dict[str, str]:
         return {}
 
 
-def _fetch_dart_roe(stock_code: str, corp_map: dict) -> str | None:
-    """DART 공식 사업보고서에서 ROE(자기자본이익률) 조회."""
+def _fetch_dart_indicators(stock_code: str, corp_map: dict) -> dict:
+    """DART 사업보고서에서 ROE·영업이익률(수익성) + 부채비율(안정성) 조회."""
     corp_code = corp_map.get(stock_code)
     if not corp_code:
-        return None
+        return {}
+
+    # 조회할 지표 클래스: {idx_cl_code: {DART지표명: 저장필드명}}
+    classes = {
+        "M210000": {  # 수익성 지표
+            "자기자본이익률": "roe",
+            "매출액영업이익률": "operating_margin",
+        },
+        "M220000": {  # 안정성 지표
+            "부채비율": "debt_ratio",
+        },
+    }
+
+    result = {}
     for year in ("2024", "2023"):
-        try:
-            r = requests.get(
-                "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
-                params={
-                    "crtfc_key": DART_KEY,
-                    "corp_code": corp_code,
-                    "bsns_year": year,
-                    "reprt_code": "11011",   # 사업보고서
-                    "idx_cl_code": "M210000",  # 수익성 지표
-                },
-                timeout=15,
-            )
-            data = r.json()
-            if data.get("status") != "000":
+        for idx_cl_code, field_map in classes.items():
+            try:
+                r = requests.get(
+                    "https://opendart.fss.or.kr/api/fnlttSinglIndx.json",
+                    params={
+                        "crtfc_key": DART_KEY,
+                        "corp_code": corp_code,
+                        "bsns_year": year,
+                        "reprt_code": "11011",
+                        "idx_cl_code": idx_cl_code,
+                    },
+                    timeout=15,
+                )
+                data = r.json()
+                if data.get("status") != "000":
+                    continue
+                for item in data.get("list", []):
+                    nm = item.get("idx_nm", "")
+                    for dart_nm, field in field_map.items():
+                        if dart_nm in nm and field not in result:
+                            val = item.get("idx_val", "").replace(",", "")
+                            try:
+                                result[field] = str(round(float(val), 1))
+                            except Exception:
+                                pass
+            except Exception:
                 continue
-            for item in data.get("list", []):
-                nm = item.get("idx_nm", "")
-                if "자기자본이익률" in nm or "ROE" in nm.upper():
-                    val = item.get("idx_val", "").replace(",", "")
-                    return str(round(float(val), 1))
-        except Exception:
-            continue
-    return None
+        if result:
+            break
+
+    return result
 
 
 def run_korean() -> dict:
@@ -90,16 +111,18 @@ def run_korean() -> dict:
         detail = fetch_stock_detail(stock.get("code", ""))
         stock.update(detail)
 
-    # DART 공식 ROE로 교체
+    # DART 공식 지표로 교체 (ROE·영업이익률·부채비율)
     if DART_KEY:
         corp_map = _get_dart_corp_map()
         for stock in analyzed:
-            roe = _fetch_dart_roe(stock.get("code", ""), corp_map)
-            if roe:
-                stock["roe"] = roe
-                print(f"  {stock['name']}: ROE {roe}% (DART)")
+            indicators = _fetch_dart_indicators(stock.get("code", ""), corp_map)
+            if indicators:
+                stock.update(indicators)
+                print(f"  {stock['name']}: ROE={indicators.get('roe','N/A')}% "
+                      f"영업이익률={indicators.get('operating_margin','N/A')}% "
+                      f"부채비율={indicators.get('debt_ratio','N/A')}%")
     else:
-        print("  DART_API_KEY 없음 — yfinance ROE 사용")
+        print("  DART_API_KEY 없음 — yfinance 데이터 사용")
 
     overlaps = compare_with_previous(analyzed, prev_report)
     save_report(analyzed)
