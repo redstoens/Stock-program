@@ -524,6 +524,22 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
         if today not in track["benchmark"]:
             track["benchmark"][today] = kospi_now  # 오늘 추천 배치의 진입 기준
 
+    # 추천 시점 분석 데이터 스냅샷에 포함할 키
+    _SNAPSHOT_KEYS = {
+        "name", "code", "sector", "stock_type", "reason",
+        "per", "roe", "pbr", "risk_level",
+        "investment_horizon", "hold_period", "horizon_reason",
+        "earnings_trend", "trend_summary",
+        "operating_margin", "debt_ratio", "foreign_trend",
+        "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
+        "macd_hist", "macd_signal", "tech_summary",
+        "volume_ratio", "volume_signal",
+        "dividend_yield", "dividend_history",
+        "future_target", "stop_loss",
+        "buy_score", "buy_score_label",
+        "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
+    }
+
     # 오늘 분석 결과 신규 추가 (같은 날 중복 방지)
     existing_today = {r["code"] for r in track["records"] if r["rec_date"] == today}
     added = 0
@@ -535,6 +551,7 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
         if not entry_price:
             continue
         hold_period = stock.get("hold_period", "")
+        snapshot = {k: v for k, v in stock.items() if k in _SNAPSHOT_KEYS}
         track["records"].append({
             "rec_date":          today,
             "code":              code,
@@ -554,6 +571,7 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
             "exit_date":         None,
             "exit_price":        None,
             "exit_return_pct":   None,
+            "snapshot":          snapshot,
         })
         added += 1
 

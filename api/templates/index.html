@@ -616,7 +616,7 @@
       const horiz = r.investment_horizon || r.hold_period || '-';
       return `<tr>
         <td>${r.rec_date}</td>
-        <td class="vt-name-cell" onclick="openStockModal('${r.code}', '${currentVerifyMarket}')"><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
+        <td class="vt-name-cell" onclick="openVerifyModal('${r.rec_date}', '${r.code}')"><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
         <td>${horiz}</td>
         <td>${entryPrice}</td>
         <td style="color:#276749">${tgt}</td>
@@ -1053,6 +1053,27 @@
   }
 
   // ── 종목 상세 모달 ─────────────────────────────────────────────
+  function openVerifyModal(recDate, code) {
+    // verifyRecords에서 해당 기록 찾기
+    const rec = verifyRecords.find(r => r.rec_date === recDate && r.code === code);
+    if (rec && rec.snapshot) {
+      // 추천 당시 스냅샷이 있으면 바로 표시
+      const overlay = document.getElementById('stock-modal');
+      const wrap    = document.getElementById('modal-card-wrap');
+      const note    = overlay.querySelector('.modal-header-note');
+      note.textContent = `※ ${recDate} 추천 당시의 분석 데이터입니다.`;
+      wrap.innerHTML = '';
+      overlay.classList.add('open');
+      document.body.style.overflow = 'hidden';
+      renderStocks([rec.snapshot], '모두', 'modal-card-wrap', currentVerifyMarket);
+    } else {
+      // 스냅샷 없는 구 기록 → 오늘 캐시에서 fallback
+      const note = document.querySelector('.modal-header-note');
+      if (note) note.textContent = '※ 오늘 추천 목록 기준 분석 리포트입니다.';
+      openStockModal(code, currentVerifyMarket);
+    }
+  }
+
   async function openStockModal(code, market) {
     const overlay = document.getElementById('stock-modal');
     const wrap    = document.getElementById('modal-card-wrap');
