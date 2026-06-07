@@ -1,10 +1,10 @@
 import sys
 import os
 
-_ROOT = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(_ROOT, "api"))
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _HERE)
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, render_template
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
 from scraper_us import fetch_sp500_stocks, format_for_prompt_us
 from analyzer import analyze_stocks
@@ -12,13 +12,12 @@ from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 
-PUBLIC_DIR = os.path.join(_ROOT, "public")
-app = Flask(__name__, static_folder=PUBLIC_DIR)
+app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
 
 @app.route("/")
 def index():
-    return send_from_directory(PUBLIC_DIR, "index.html")
+    return render_template("index.html")
 
 
 @app.route("/api/analyze", methods=["POST"])
