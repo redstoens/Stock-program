@@ -1,9 +1,8 @@
 import sys
 import os
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_HERE)
-sys.path.insert(0, _HERE)
+_ROOT = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(_ROOT, "api"))
 
 from flask import Flask, request, jsonify, send_from_directory
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
