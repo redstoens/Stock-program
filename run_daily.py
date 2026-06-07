@@ -185,6 +185,17 @@ def _hold_max_days(hold_period: str) -> int:
     return max_n * 365 if "년" in hold_period else max_n * 30
 
 
+def _fetch_kospi_index() -> float:
+    """KOSPI 지수 현재값 조회 (^KS11)."""
+    try:
+        hist = yf.Ticker("^KS11").history(period="1d")
+        if not hist.empty:
+            return round(float(hist["Close"].iloc[-1]), 2)
+    except Exception:
+        pass
+    return 0.0
+
+
 def _fetch_current_price(code: str) -> int:
     """yfinance로 현재가 조회 (KS → KQ 순서로 시도)."""
     for suffix in (".KS", ".KQ"):
@@ -204,9 +215,20 @@ def _update_tracking(analyzed: list[dict], track_path: str) -> None:
         with open(track_path, encoding="utf-8") as f:
             track = json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
-        track = {"records": []}
+        track = {"records": [], "benchmark": {}}
+
+    if "benchmark" not in track:
+        track["benchmark"] = {}
 
     today = date.today().isoformat()
+
+    # KOSPI 현재값 저장 (진입 기준값 + current 모두 갱신)
+    kospi_now = _fetch_kospi_index()
+    if kospi_now:
+        track["benchmark"]["current"] = kospi_now
+        track["benchmark"]["updated"] = today
+        if today not in track["benchmark"]:
+            track["benchmark"][today] = kospi_now  # 오늘 추천 배치의 진입 기준
 
     # 오늘 분석 결과 신규 추가 (같은 날 중복 방지)
     existing_today = {r["code"] for r in track["records"] if r["rec_date"] == today}

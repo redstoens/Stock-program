@@ -148,6 +148,40 @@
     .verify-empty { text-align: center; padding: 3rem 1rem; color: #a0aec0; font-size: 0.9rem; }
     .verify-avg { background: #f0fff4; border: 1.5px solid #9ae6b4; border-radius: 10px; padding: 0.75rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; color: #276749; display: flex; gap: 1.5rem; flex-wrap: wrap; }
     .verify-avg span { font-weight: 700; }
+
+    /* ── 포트폴리오 시뮬레이션 ── */
+    .sim-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+    .sim-header { display: flex; align-items: baseline; gap: 0.75rem; margin-bottom: 1.25rem; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 0.85rem; }
+    .sim-header > span:first-child { font-size: 1rem; font-weight: 700; }
+    .sim-subtitle { font-size: 0.78rem; color: #718096; }
+    .sim-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 0.75rem; margin-bottom: 1.5rem; }
+    .sim-stat { background: #f7fafc; border-radius: 10px; padding: 0.9rem 0.5rem; text-align: center; border: 1px solid #e2e8f0; }
+    .sim-stat-val { font-size: 1.35rem; font-weight: 800; margin-bottom: 0.25rem; }
+    .sim-stat-lbl { font-size: 0.68rem; color: #718096; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+    .sim-stat-val.pos { color: #276749; }
+    .sim-stat-val.neg { color: #c53030; }
+    .sim-stat-val.neu { color: #718096; }
+    .sim-divider { font-size: 0.78rem; font-weight: 700; color: #a0aec0; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sim-batches { display: flex; flex-direction: column; gap: 0.85rem; }
+    .sim-batch { background: #f7fafc; border-radius: 10px; padding: 1rem; border: 1px solid #e2e8f0; }
+    .sim-batch-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.8rem; flex-wrap: wrap; }
+    .sim-batch-date { font-weight: 700; font-size: 0.88rem; color: #2d3748; }
+    .sim-batch-days { background: #ebf8ff; color: #2b6cb0; border-radius: 999px; padding: 0.15rem 0.55rem; font-size: 0.73rem; font-weight: 700; }
+    .sim-batch-count { font-size: 0.76rem; color: #718096; margin-left: auto; }
+    .sim-bar-row { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; }
+    .sim-bar-lbl { width: 75px; font-size: 0.76rem; color: #4a5568; font-weight: 600; flex-shrink: 0; }
+    .sim-bar-bg { flex: 1; height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+    .sim-bar-fill { height: 100%; border-radius: 4px; }
+    .sim-bar-val { width: 58px; text-align: right; font-size: 0.82rem; font-weight: 700; flex-shrink: 0; }
+    .sim-bar-val.pos { color: #276749; }
+    .sim-bar-val.neg { color: #c53030; }
+    .sim-bar-val.neu { color: #718096; }
+    .sim-excess { font-size: 0.78rem; font-weight: 600; margin-top: 0.45rem; padding: 0.28rem 0.65rem; border-radius: 6px; display: inline-block; }
+    .sim-excess.pos { background: #f0fff4; color: #276749; }
+    .sim-excess.neg { background: #fff5f5; color: #c53030; }
+    .sim-excess.neu { background: #f7fafc; color: #718096; }
+    .sim-updated { font-size: 0.7rem; color: #a0aec0; margin-top: 1rem; text-align: right; }
+    .sim-empty { text-align: center; padding: 2rem 1rem; color: #a0aec0; font-size: 0.88rem; }
   </style>
 </head>
 <body>
@@ -166,6 +200,7 @@
   </div>
 
   <div id="verify-section">
+    <div id="sim-section"></div>
     <div id="verify-summary-row" class="verify-summary"></div>
     <div id="verify-avg-bar" class="verify-avg" style="display:none"></div>
     <div class="verify-filter">
@@ -272,11 +307,118 @@
       const res = await fetch('/api/verify-kr');
       const data = await res.json();
       verifyRecords = (data.records || []).slice().reverse(); // 최신순
+      renderSimulation(verifyRecords, data.benchmark || {});
       renderVerify('all');
     } catch(e) {
       document.getElementById('verify-tbody').innerHTML =
         '<tr><td colspan="9" class="verify-empty">데이터를 불러올 수 없습니다.</td></tr>';
     }
+  }
+
+  function renderSimulation(records, benchmark) {
+    const sec = document.getElementById('sim-section');
+    if (!records.length) {
+      sec.innerHTML = '<div class="sim-card"><div class="sim-empty">GitHub Actions 실행 후 추적 데이터가 쌓이면 시뮬레이션이 표시됩니다.</div></div>';
+      return;
+    }
+
+    const kospiNow = benchmark.current || 0;
+
+    // rec_date별 배치 그룹화 (최신순)
+    const batchMap = {};
+    for (const r of records) {
+      (batchMap[r.rec_date] = batchMap[r.rec_date] || []).push(r);
+    }
+    const batchDates = Object.keys(batchMap).sort().reverse();
+
+    const batches = batchDates.map(dt => {
+      const recs = batchMap[dt];
+      const returns = recs.map(r => r.exit_return_pct ?? r.current_return_pct ?? 0);
+      const portReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
+      const kospiEntry = benchmark[dt] || 0;
+      const kospiReturn = (kospiEntry && kospiNow)
+        ? (kospiNow - kospiEntry) / kospiEntry * 100
+        : null;
+      const daysElapsed = Math.floor((Date.now() - new Date(dt)) / 86400000);
+      return { dt, recs, portReturn, kospiReturn, daysElapsed };
+    });
+
+    // 전체 요약 계산
+    const avgPort  = batches.reduce((s, b) => s + b.portReturn, 0) / batches.length;
+    const bwk      = batches.filter(b => b.kospiReturn !== null);
+    const avgKospi = bwk.length ? bwk.reduce((s, b) => s + b.kospiReturn, 0) / bwk.length : null;
+    const avgExcess = avgKospi !== null ? avgPort - avgKospi : null;
+
+    function fmt(n) {
+      if (n === null || n === undefined) return 'N/A';
+      return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+    }
+    function cls(n) {
+      if (n === null || n === undefined) return 'neu';
+      return n > 0 ? 'pos' : n < 0 ? 'neg' : 'neu';
+    }
+    function barW(pct) {
+      // ±20% = 100% bar width
+      return Math.min(Math.abs(pct || 0) / 20 * 100, 100).toFixed(1);
+    }
+    function barColor(pct) {
+      return pct >= 0 ? '#48bb78' : '#fc8181';
+    }
+
+    const summaryHtml = `
+      <div class="sim-summary">
+        <div class="sim-stat">
+          <div class="sim-stat-val ${cls(avgPort)}">${fmt(avgPort)}</div>
+          <div class="sim-stat-lbl">포트폴리오 평균</div>
+        </div>
+        <div class="sim-stat">
+          <div class="sim-stat-val ${cls(avgKospi)}">${fmt(avgKospi)}</div>
+          <div class="sim-stat-lbl">KOSPI 평균</div>
+        </div>
+        <div class="sim-stat">
+          <div class="sim-stat-val ${cls(avgExcess)}">${fmt(avgExcess)}</div>
+          <div class="sim-stat-lbl">초과수익 (알파)</div>
+        </div>
+      </div>`;
+
+    const batchCards = batches.map(b => {
+      const excess = b.kospiReturn !== null ? b.portReturn - b.kospiReturn : null;
+      const excessTxt = excess !== null
+        ? `${excess >= 0 ? '▲' : '▼'} 초과수익 ${fmt(excess)} — ${excess >= 0 ? '시장 대비 유리' : '시장 대비 불리'}`
+        : '';
+      return `
+        <div class="sim-batch">
+          <div class="sim-batch-header">
+            <span class="sim-batch-date">${b.dt}</span>
+            <span class="sim-batch-days">D+${b.daysElapsed}</span>
+            <span class="sim-batch-count">${b.recs.length}종목 · 균등 비중</span>
+          </div>
+          <div class="sim-bar-row">
+            <span class="sim-bar-lbl">포트폴리오</span>
+            <div class="sim-bar-bg"><div class="sim-bar-fill" style="width:${barW(b.portReturn)}%;background:${barColor(b.portReturn)}"></div></div>
+            <span class="sim-bar-val ${cls(b.portReturn)}">${fmt(b.portReturn)}</span>
+          </div>
+          ${b.kospiReturn !== null ? `
+          <div class="sim-bar-row">
+            <span class="sim-bar-lbl">KOSPI</span>
+            <div class="sim-bar-bg"><div class="sim-bar-fill" style="width:${barW(b.kospiReturn)}%;background:${barColor(b.kospiReturn)}"></div></div>
+            <span class="sim-bar-val ${cls(b.kospiReturn)}">${fmt(b.kospiReturn)}</span>
+          </div>` : ''}
+          ${excess !== null ? `<div class="sim-excess ${cls(excess)}">${excessTxt}</div>` : ''}
+        </div>`;
+    }).join('');
+
+    sec.innerHTML = `
+      <div class="sim-card">
+        <div class="sim-header">
+          <span>📈 포트폴리오 시뮬레이션</span>
+          <span class="sim-subtitle">추천 종목 균등 비중 가상 매수 vs KOSPI 비교</span>
+        </div>
+        ${summaryHtml}
+        <div class="sim-divider">배치별 성과 (${batches.length}회 추천)</div>
+        <div class="sim-batches">${batchCards}</div>
+        ${benchmark.updated ? `<div class="sim-updated">KOSPI 마지막 갱신: ${benchmark.updated}</div>` : ''}
+      </div>`;
   }
 
   function filterVerify(status) {
