@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>저평가 가치주 분석 AI 리포트</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', 'Apple SD Gothic Neo', sans-serif; background: #f0f4f8; color: #1a202c; min-height: 100vh; }
+
+    header { background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%); color: white; padding: 2rem 1.5rem; text-align: center; }
+    header h1 { font-size: 1.7rem; font-weight: 700; margin-bottom: 0.4rem; }
+    header p  { font-size: 0.9rem; opacity: 0.85; }
+
+    .container { max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
+    .card h2 { font-size: 1rem; color: #4a5568; margin-bottom: 1rem; font-weight: 600; }
+
+    .memo-label { display: block; font-size: 0.85rem; color: #718096; font-weight: 500; margin-bottom: 0.5rem; }
+    .memo-input { width: 100%; padding: 0.7rem 0.9rem; border: 1.5px solid #e2e8f0; border-radius: 8px; font-size: 0.92rem; color: #2d3748; outline: none; resize: none; font-family: inherit; line-height: 1.5; transition: border-color 0.2s; }
+    .memo-input:focus { border-color: #2b6cb0; }
+    .memo-hint { font-size: 0.78rem; color: #a0aec0; margin-top: 0.4rem; }
+
+    .btn-primary { width: 100%; padding: 0.85rem; background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #loading { display: none; text-align: center; padding: 2.5rem 1rem; }
+    .spinner { width: 44px; height: 44px; border: 4px solid #e2e8f0; border-top-color: #2b6cb0; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { color: #718096; font-size: 0.9rem; }
+
+    #error-box { display: none; background: #fff5f5; border: 1.5px solid #fc8181; border-radius: 10px; padding: 1rem 1.25rem; color: #c53030; font-size: 0.9rem; margin-bottom: 1.5rem; }
+
+    #result-section { display: none; }
+    .result-meta { font-size: 0.82rem; color: #a0aec0; margin-bottom: 1.2rem; }
+
+    /* 과거 리포트 비교 */
+    .history-box { background: #fffbeb; border: 1.5px solid #f6e05e; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
+    .history-box h3 { font-size: 0.88rem; font-weight: 700; color: #744210; margin-bottom: 0.6rem; }
+    .history-item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.3rem; }
+    .history-item .chg-pos { color: #22543d; font-weight: 700; }
+    .history-item .chg-neg { color: #9b2c2c; font-weight: 700; }
+    .history-item .chg-neu { color: #718096; }
+
+    /* 종목 카드 */
+    .stock-card { background: white; border-radius: 12px; padding: 1.4rem 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.2rem; border-left: 4px solid #2b6cb0; }
+
+    .stock-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
+    .stock-num { background: #2b6cb0; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+    .stock-name { font-size: 1.1rem; font-weight: 700; }
+    .stock-code { font-size: 0.82rem; color: #718096; margin-left: 0.25rem; }
+
+    .badge-row { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .badge { padding: 0.22rem 0.65rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; }
+    .badge-type { background: #faf5ff; color: #6b46c1; }
+    .badge-per  { background: #ebf8ff; color: #2b6cb0; }
+    .badge-roe  { background: #f0fff4; color: #276749; }
+    .badge-risk-low { background: #f0fff4; color: #276749; }
+    .badge-risk-mid { background: #fffbeb; color: #744210; }
+    .badge-risk-hi  { background: #fff5f5; color: #c53030; }
+
+    /* 정보 그리드 */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 1rem; }
+    .info-item { background: #f7fafc; border-radius: 8px; padding: 0.55rem 0.75rem; border: 1px solid #e2e8f0; }
+    .info-item .lbl { font-size: 0.7rem; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .info-item .val { font-size: 0.88rem; color: #2d3748; font-weight: 500; }
+
+    /* 섹션 텍스트 */
+    .section-block { margin-bottom: 0.85rem; }
+    .section-lbl { font-size: 0.74rem; font-weight: 700; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+    .section-body { font-size: 0.9rem; color: #2d3748; line-height: 1.6; }
+
+    .valuation-box { background: #f7fafc; border-radius: 8px; padding: 0.65rem 1rem; font-size: 0.87rem; color: #4a5568; border: 1px solid #e2e8f0; margin-bottom: 0.75rem; }
+
+    /* 가격 박스 */
+    .price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin-top: 0.5rem; }
+    .price-box { border-radius: 8px; padding: 0.65rem 1rem; }
+    .price-box .plbl { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+    .price-box .pval { font-weight: 700; font-size: 0.92rem; }
+    .price-box.target   { background: #f0fff4; border: 1px solid #9ae6b4; }
+    .price-box.target .plbl { color: #276749; }
+    .price-box.target .pval { color: #22543d; }
+    .price-box.stoploss { background: #fff5f5; border: 1px solid #feb2b2; }
+    .price-box.stoploss .plbl { color: #c53030; }
+    .price-box.stoploss .pval { color: #9b2c2c; }
+
+    /* 52주 바 */
+    .week52-bar-wrap { margin: 0.75rem 0; }
+    .week52-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #718096; margin-bottom: 0.25rem; }
+    .week52-bar { height: 6px; background: #e2e8f0; border-radius: 3px; position: relative; }
+    .week52-fill { height: 100%; background: linear-gradient(90deg, #fc8181, #f6e05e, #68d391); border-radius: 3px; }
+    .week52-dot  { position: absolute; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; background: #2b6cb0; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 4px rgba(0,0,0,0.2); margin-left: -6px; }
+    .week52-pct  { font-size: 0.72rem; color: #718096; text-align: right; margin-top: 0.2rem; }
+
+    .btn-download { display: block; width: 100%; padding: 0.75rem; background: #f7fafc; color: #2b6cb0; border: 1.5px solid #bee3f8; border-radius: 10px; font-size: 0.95rem; font-weight: 600; text-align: center; cursor: pointer; margin-top: 1.5rem; transition: background 0.2s; }
+    .btn-download:hover { background: #ebf8ff; }
+
+    .section-header { display: flex; align-items: center; gap: 0.6rem; margin: 1.8rem 0 1rem; }
+    .section-header .sh-badge { padding: 0.3rem 0.9rem; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+    .sh-short { background: #fff3cd; color: #856404; border: 1.5px solid #ffc107; }
+    .sh-long  { background: #d1ecf1; color: #0c5460; border: 1.5px solid #17a2b8; }
+    .section-header .sh-desc { font-size: 0.8rem; color: #718096; }
+    .stock-card.short { border-left-color: #f6ad55; }
+    .stock-card.long  { border-left-color: #4299e1; }
+    .horizon-bar { display: flex; align-items: center; gap: 0.5rem; background: #f7fafc; border-radius: 8px; padding: 0.55rem 0.85rem; margin-bottom: 0.85rem; border: 1px solid #e2e8f0; font-size: 0.84rem; }
+    .horizon-bar .h-period { font-weight: 700; color: #2d3748; }
+    .horizon-bar .h-reason { color: #718096; }
+    .disclaimer { font-size: 0.78rem; color: #a0aec0; text-align: center; margin-top: 2rem; line-height: 1.6; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📈 저평가 가치주 분석 AI 리포트</h1>
+  <p>KOSPI 대형주 중 기업가치 대비 저평가된 우량 가치주 5개를 자동 선정합니다</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>분석 메모 <span style="font-weight:400;color:#a0aec0">(선택사항)</span></h2>
+    <label class="memo-label">AI에게 원하는 분석 방향을 자유롭게 입력하세요</label>
+    <textarea class="memo-input" id="memo" rows="2"
+      placeholder="예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주"></textarea>
+    <p class="memo-hint">비워두면 PER·ROE 기준 저평가 종목을 자동 선정합니다.</p>
+  </div>
+
+  <button class="btn-primary" id="btn-analyze" onclick="runAnalysis()">🔍 리포트 생성</button>
+
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>네이버금융 데이터 수집 및 AI 분석 중...<br/>20~40초 소요됩니다</p>
+  </div>
+
+  <div id="error-box"></div>
+
+  <div id="result-section">
+    <p class="result-meta" id="result-meta"></p>
+    <div id="history-section"></div>
+    <div id="short-section"></div>
+    <div id="long-section"></div>
+    <button class="btn-download" onclick="downloadReport()">⬇️ 리포트 마크다운 저장</button>
+  </div>
+
+  <p class="disclaimer">
+    본 서비스는 정보 제공 목적이며 투자 추천이 아닙니다.<br/>
+    최종 투자 판단은 본인의 책임입니다.
+  </p>
+</div>
+
+<script>
+  let reportMarkdown = '';
+
+  const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
+  const RISK_LABEL = { '하': '🟢 리스크 낮음', '중': '🟡 리스크 보통', '상': '🔴 리스크 높음' };
+  const TREND_ICON = { '개선': '📈', '보합': '➡️', '악화': '📉' };
+
+  async function runAnalysis() {
+    const memo = document.getElementById('memo').value.trim();
+    document.getElementById('btn-analyze').disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error-box').style.display = 'none';
+    document.getElementById('result-section').style.display = 'none';
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ memo })
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || '알 수 없는 오류');
+
+      reportMarkdown = data.report;
+      renderHistory(data.overlaps, data.prev_date);
+      renderStocks(data.stocks, '단기', 'short-section');
+      renderStocks(data.stocks, '중장기', 'long-section');
+
+      const now = new Date().toLocaleDateString('ko-KR');
+      document.getElementById('result-meta').textContent =
+        `생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
+      document.getElementById('result-section').style.display = 'block';
+
+    } catch (err) {
+      const box = document.getElementById('error-box');
+      box.textContent = '❌ 오류: ' + err.message;
+      box.style.display = 'block';
+    } finally {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('btn-analyze').disabled = false;
+    }
+  }
+
+  function renderHistory(overlaps, prevDate) {
+    const sec = document.getElementById('history-section');
+    if (!overlaps || overlaps.length === 0) { sec.innerHTML = ''; return; }
+
+    let items = overlaps.map(o => {
+      const pct = o.change_pct;
+      let cls = 'chg-neu', icon = '➡️';
+      if (pct !== 'N/A') {
+        const n = parseFloat(pct);
+        if (n > 0) { cls = 'chg-pos'; icon = '▲'; }
+        else if (n < 0) { cls = 'chg-neg'; icon = '▼'; }
+      }
+      return `<div class="history-item">
+        <span>📌 ${o.name}</span>
+        <span class="${cls}">${icon} ${pct}</span>
+        <span style="color:#a0aec0;font-size:0.78rem">(${prevDate} 추천 대비)</span>
+      </div>`;
+    }).join('');
+
+    sec.innerHTML = `<div class="history-box">
+      <h3>📊 지난 리포트와 겹치는 종목 (${prevDate})</h3>
+      ${items}
+    </div>`;
+  }
+
+  function renderStocks(stocks, horizon, containerId) {
+    const container = document.getElementById(containerId);
+    const filtered = stocks.filter(s => (s.investment_horizon || '중장기') === horizon);
+
+    if (filtered.length === 0) { container.innerHTML = ''; return; }
+
+    const isShort = horizon === '단기';
+    container.innerHTML = `
+      <div class="section-header">
+        <span class="sh-badge ${isShort ? 'sh-short' : 'sh-long'}">
+          ${isShort ? '⚡ 단기 투자' : '📦 중장기 투자'}
+        </span>
+        <span class="sh-desc">${isShort ? '1~3개월 내 수익 실현 목표' : '6개월 이상 보유, 펀더멘털 기반'}</span>
+      </div>`;
+
+    filtered.forEach((s, i) => {
+      const per  = s.per  && s.per  !== 'N/A' ? `PER ${s.per}`  : '';
+      const roe  = s.roe  && s.roe  !== 'N/A' ? `ROE ${s.roe}%` : '';
+      const risk = s.risk_level || '';
+      const riskCls = RISK_CLASS[risk] || '';
+      const riskLbl = RISK_LABEL[risk] || risk;
+      const trendKey = (s.earnings_trend || '').split(' ')[0];
+      const trendIcon = TREND_ICON[trendKey] || '';
+
+      // 52주 바 위치 계산
+      let barHtml = '';
+      try {
+        const cur  = s.current_price_raw;
+        const high = parseInt((s.week52_high || '').replace(/,/g, ''));
+        const low  = parseInt((s.week52_low  || '').replace(/,/g, ''));
+        if (cur && high && low && high > low) {
+          const pct = Math.min(100, Math.max(0, Math.round((cur - low) / (high - low) * 100)));
+          barHtml = `
+            <div class="week52-bar-wrap">
+              <div class="week52-labels">
+                <span>52주 최저 ${s.week52_low}</span>
+                <span>52주 최고 ${s.week52_high}</span>
+              </div>
+              <div class="week52-bar">
+                <div class="week52-fill" style="width:100%"></div>
+                <div class="week52-dot" style="left:${pct}%"></div>
+              </div>
+              <div class="week52-pct">현재가 위치: 최저 대비 +${pct}% 구간 ${s.week52_pct_from_high ? '· 고점 대비 ' + s.week52_pct_from_high : ''}</div>
+            </div>`;
+        }
+      } catch(e) {}
+
+      container.innerHTML += `
+        <div class="stock-card ${isShort ? 'short' : 'long'}">
+          <div class="stock-header">
+            <div class="stock-num">${i + 1}</div>
+            <div>
+              <span class="stock-name">${s.name}</span>
+              <span class="stock-code">(${s.code})</span>
+            </div>
+          </div>
+
+          <div class="badge-row">
+            ${s.stock_type ? `<span class="badge badge-type">📌 ${s.stock_type}</span>` : ''}
+            ${per ? `<span class="badge badge-per">${per}</span>` : ''}
+            ${roe ? `<span class="badge badge-roe">${roe}</span>` : ''}
+            ${riskCls ? `<span class="badge ${riskCls}">${riskLbl}</span>` : ''}
+          </div>
+          ${(s.hold_period || s.horizon_reason) ? `
+          <div class="horizon-bar">
+            <span>${isShort ? '⚡' : '📦'}</span>
+            ${s.hold_period ? `<span class="h-period">예상 보유 ${s.hold_period}</span>` : ''}
+            ${s.horizon_reason ? `<span class="h-reason">— ${s.horizon_reason}</span>` : ''}
+          </div>` : ''}
+
+          <div class="info-grid">
+            <div class="info-item">
+              <div class="lbl">배당수익률</div>
+              <div class="val">${s.dividend_yield || '-'}</div>
+            </div>
+            <div class="info-item">
+              <div class="lbl">실적 트렌드</div>
+              <div class="val">${trendIcon} ${s.earnings_trend || '-'}</div>
+            </div>
+            <div class="info-item" style="grid-column:1/-1">
+              <div class="lbl">외국인·기관 수급</div>
+              <div class="val">${s.foreign_trend || '-'}</div>
+            </div>
+          </div>
+
+          ${barHtml}
+
+          <div class="section-block">
+            <div class="section-lbl">선정 이유</div>
+            <div class="section-body">${s.reason}</div>
+          </div>
+          <div class="section-block">
+            <div class="section-lbl">관련 뉴스 / 동향</div>
+            <div class="section-body">${s.news_summary}</div>
+          </div>
+          ${s.risk_reason ? `<div class="section-block">
+            <div class="section-lbl">주요 리스크</div>
+            <div class="section-body">⚠️ ${s.risk_reason}</div>
+          </div>` : ''}
+
+          <div class="valuation-box">💡 ${s.valuation}</div>
+
+          <div class="price-grid">
+            <div class="price-box target">
+              <div class="plbl">🎯 12개월 목표주가</div>
+              <div class="pval">${s.future_target || '-'}</div>
+              <div style="font-size:0.78rem;color:#276749;margin-top:0.2rem;font-weight:600">${s.upside_pct ? '상승여력 ' + s.upside_pct : ''}</div>
+              ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${s.current_price_raw.toLocaleString()}원</div>` : ''}
+            </div>
+            <div class="price-box stoploss">
+              <div class="plbl">🛑 손절 기준가</div>
+              <div class="pval">${s.stop_loss || '-'}</div>
+            </div>
+          </div>
+        </div>`;
+    });
+  }
+
+  function downloadReport() {
+    if (!reportMarkdown) return;
+    const today = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    const blob = new Blob([reportMarkdown], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `가치주_리포트_${today}.md`;
+    a.click();
+  }
+</script>
+</body>
+</html>
