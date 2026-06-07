@@ -262,6 +262,19 @@
     .te-term { font-weight: 700; color: #4a5568; white-space: nowrap; min-width: 5.5rem; }
     .te-desc { color: #718096; }
 
+    /* ── 종목 상세 모달 ── */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; overflow-y:auto; padding:2rem 1rem; }
+    .modal-overlay.open { display:block; }
+    .modal-panel { background:white; border-radius:16px; max-width:740px; margin:0 auto; padding:1.75rem 1.75rem 1rem; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+    .modal-close { position:absolute; top:1rem; right:1rem; background:#f7fafc; border:1px solid #e2e8f0; border-radius:50%; width:32px; height:32px; font-size:1rem; cursor:pointer; color:#718096; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+    .modal-close:hover { background:#edf2f7; color:#2d3748; }
+    .modal-header-note { font-size:0.75rem; color:#a0aec0; margin-bottom:1rem; }
+    /* 검증 테이블 종목명 클릭 */
+    .vt-name-cell { cursor:pointer; }
+    .vt-name-cell b { transition:color 0.15s; }
+    .vt-name-cell:hover b { color:#2b6cb0; text-decoration:underline; }
+    .vt-name-cell:hover { background:#f7fafc; }
+
     /* ── 검증 탭 내 시장 서브탭 ── */
     .verify-market-tabs { display: flex; gap: 0.4rem; margin-bottom: 1.2rem; }
     .vmt-btn { flex: 1; padding: 0.6rem; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; }
@@ -356,6 +369,15 @@
     본 서비스는 정보 제공 목적이며 투자 추천이 아닙니다.<br/>
     최종 투자 판단은 본인의 책임입니다.
   </p>
+</div>
+
+<!-- 종목 상세 모달 -->
+<div class="modal-overlay" id="stock-modal" onclick="closeStockModal(event)">
+  <div class="modal-panel" id="modal-panel">
+    <button class="modal-close" onclick="closeStockModal()">✕</button>
+    <p class="modal-header-note">※ 오늘 추천 목록 기준 분석 리포트입니다.</p>
+    <div id="modal-card-wrap"></div>
+  </div>
 </div>
 
 <script>
@@ -594,7 +616,7 @@
       const horiz = r.investment_horizon || r.hold_period || '-';
       return `<tr>
         <td>${r.rec_date}</td>
-        <td><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
+        <td class="vt-name-cell" onclick="openStockModal('${r.code}', '${currentVerifyMarket}')"><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
         <td>${horiz}</td>
         <td>${entryPrice}</td>
         <td style="color:#276749">${tgt}</td>
@@ -1029,6 +1051,52 @@
     if (krFavs.length) renderStocks(krFavs, '모두', 'fav-kr-cont', 'kr');
     if (usFavs.length) renderStocks(usFavs, '모두', 'fav-us-cont', 'us');
   }
+
+  // ── 종목 상세 모달 ─────────────────────────────────────────────
+  async function openStockModal(code, market) {
+    const overlay = document.getElementById('stock-modal');
+    const wrap    = document.getElementById('modal-card-wrap');
+    wrap.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#a0aec0">분석 데이터 불러오는 중...</div>';
+    overlay.classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    // cachedStocks에 있으면 바로 사용
+    let stock = (cachedStocks[market] || []).find(s => s.code === code);
+
+    // 없으면 API에서 fetch
+    if (!stock) {
+      try {
+        const endpoint = market === 'us' ? '/api/cached-us' : '/api/cached-kr';
+        const res  = await fetch(endpoint);
+        const data = await res.json();
+        if (data.success && data.stocks) {
+          cachedStocks[market] = data.stocks;
+          stock = data.stocks.find(s => s.code === code);
+        }
+      } catch(e) {}
+    }
+
+    wrap.innerHTML = '';
+    if (!stock) {
+      wrap.innerHTML = `<div style="text-align:center;padding:2.5rem;color:#a0aec0;line-height:2">
+        오늘 추천 목록에 없는 종목입니다.<br/>
+        과거 추천 기록이지만 현재 분석 데이터가 없어 카드를 표시할 수 없습니다.
+      </div>`;
+      return;
+    }
+    renderStocks([stock], '모두', 'modal-card-wrap', market);
+  }
+
+  function closeStockModal(e) {
+    if (e && e.target !== document.getElementById('stock-modal')) return;
+    document.getElementById('stock-modal').classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  // ESC 키로 모달 닫기
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeStockModal();
+  });
 
   function downloadReport() {
     if (!reportMarkdown) return;
