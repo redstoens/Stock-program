@@ -15,6 +15,7 @@ from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 from news_fetcher import fetch_news_with_sentiment
+from analyzer_single import analyze_single_stock
 
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
@@ -106,6 +107,63 @@ def analyze():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/fear-greed")
+def fear_greed():
+    def _fetch_vix():
+        return yf.Ticker("^VIX").fast_info.last_price or 20.0
+
+    def _fetch_sp500():
+        hist = yf.Ticker("^GSPC").history(period="6mo")
+        if hist.empty:
+            return None
+        closes = hist["Close"]
+        current = float(closes.iloc[-1])
+        ma125   = float(closes.tail(125).mean()) if len(closes) >= 125 else float(closes.mean())
+        delta   = closes.diff().dropna()
+        gain    = delta.clip(lower=0).tail(14).mean()
+        loss    = (-delta.clip(upper=0)).tail(14).mean()
+        rsi     = 100 - (100 / (1 + gain / loss)) if loss > 0 else 50.0
+        return {"current": current, "ma125": ma125, "rsi": float(rsi)}
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as ex:
+            f_vix = ex.submit(_fetch_vix)
+            f_sp  = ex.submit(_fetch_sp500)
+            vix     = f_vix.result()
+            sp_data = f_sp.result()
+
+        vix_score = max(0.0, min(100.0, (40 - vix) / 30 * 100))
+
+        if sp_data:
+            pct            = (sp_data["current"] - sp_data["ma125"]) / sp_data["ma125"] * 100
+            momentum_score = max(0.0, min(100.0, 50 + pct * 5))
+            rsi_score      = max(0.0, min(100.0, float(sp_data["rsi"])))
+            rsi_val        = round(sp_data["rsi"], 1)
+        else:
+            momentum_score = rsi_score = 50.0
+            rsi_val = 50.0
+
+        score = round(vix_score * 0.5 + momentum_score * 0.3 + rsi_score * 0.2)
+
+        if   score <= 24: label = "극단적 공포"
+        elif score <= 44: label = "공포"
+        elif score <= 55: label = "중립"
+        elif score <= 74: label = "탐욕"
+        else:             label = "극단적 탐욕"
+
+        return jsonify({
+            "score": score, "label": label,
+            "vix": round(vix, 1), "rsi": rsi_val,
+            "components": {
+                "vix":      round(vix_score),
+                "momentum": round(momentum_score),
+                "rsi":      round(rsi_score),
+            }
+        })
+    except Exception as e:
+        return jsonify({"score": 50, "label": "중립", "error": str(e)})
+
+
 @app.route("/api/current-prices", methods=["POST"])
 def current_prices():
     data   = request.get_json(force=True)
@@ -135,6 +193,19 @@ def current_prices():
         results = dict(f.result() for f in futures)
 
     return jsonify({"prices": results})
+
+
+@app.route("/api/stock-search", methods=["POST"])
+def stock_search():
+    data  = request.get_json(force=True)
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"success": False, "error": "검색어를 입력하세요"}), 400
+    try:
+        result = analyze_single_stock(query)
+        return jsonify({"success": True, **result})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @app.route("/api/news")
