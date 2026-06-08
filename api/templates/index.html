@@ -782,7 +782,11 @@
     try {
       const res = await fetch(endpoint);
       const data = await res.json();
-      verifyRecords = (data.records || []).slice().reverse(); // 최신순
+      // 서버 기록(최신순) + localStorage 수동 등록 기록 병합
+      const lsKey      = currentVerifyMarket === 'us' ? 'manual_tracks_us' : 'manual_tracks_kr';
+      const manualRecs = JSON.parse(localStorage.getItem(lsKey) || '[]');
+      verifyRecords = [...(data.records || []).slice().reverse(), ...manualRecs]
+        .sort((a, b) => b.rec_date.localeCompare(a.rec_date)); // 날짜 내림차순
 
       currentVerifyFilter = 'all';
       verifyDateFrom = ''; verifyDateTo = '';
@@ -1896,38 +1900,48 @@
     return parseFloat(clean) || 0;
   }
 
-  async function trackAnalysis(btn) {
+  function trackAnalysis(btn) {
     const d = window._lastTrackData;
     if (!d) return;
-    btn.disabled = true;
-    btn.textContent = '등록 중...';
 
-    const market        = (d.market || 'KR').toLowerCase();
-    const symbol        = (d.yf_data && d.yf_data.symbol) || d.code || '';
-    const entryNum      = _parsePrice(d.entry_price)  || (d.yf_data && d.yf_data.price) || 0;
-    const targetNum     = _parsePrice(d.target_price);
-    const stopNum       = _parsePrice(d.stop_loss);
-    const currentNum    = (d.yf_data && d.yf_data.price) || entryNum;
+    const market     = (d.market || 'KR').toLowerCase();
+    const symbol     = (d.yf_data && d.yf_data.symbol) || d.code || '';
+    const code       = market === 'kr' ? symbol.replace(/\.(KS|KQ)$/i, '') : symbol;
+    const entryNum   = _parsePrice(d.entry_price)  || (d.yf_data && d.yf_data.price) || 0;
+    const targetNum  = _parsePrice(d.target_price);
+    const stopNum    = _parsePrice(d.stop_loss);
+    const currentNum = (d.yf_data && d.yf_data.price) || entryNum;
+    const today      = new Date().toISOString().split('T')[0];
+    const isLong     = (d.investment_horizon || '').includes('중장기');
+
+    const record = {
+      rec_date:           today,
+      code,
+      name:               d.name || code,
+      entry_price:        entryNum,
+      target_price_raw:   targetNum,
+      stop_loss_raw:      stopNum,
+      target_str:         d.target_price || '',
+      stop_loss_str:      d.stop_loss    || '',
+      investment_horizon: d.investment_horizon || '단기',
+      hold_period:        isLong ? '3~12개월' : '1~3개월',
+      max_days:           isLong ? 365 : 90,
+      status:             '진행중',
+      current_price:      currentNum,
+      current_return_pct: entryNum ? (currentNum - entryNum) / entryNum * 100 : 0,
+      last_updated:       today,
+      exit_date:          null,
+      exit_price:         null,
+      exit_return_pct:    null,
+      source:             'manual',
+    };
 
     try {
-      const r = await fetch('/api/track-manual-add', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          market,
-          symbol,
-          name:             d.name    || d.code || '',
-          entry_price_num:  entryNum,
-          target_price_num: targetNum,
-          stop_loss_num:    stopNum,
-          current_price_num: currentNum,
-          target_price_str: d.target_price || '',
-          stop_loss_str:    d.stop_loss    || '',
-          investment_horizon: d.investment_horizon || '단기',
-        })
-      });
-      const res = await r.json();
-      if (!res.success) throw new Error(res.error || '등록 실패');
+      const lsKey   = market === 'us' ? 'manual_tracks_us' : 'manual_tracks_kr';
+      const existing = JSON.parse(localStorage.getItem(lsKey) || '[]');
+      existing.push(record);
+      localStorage.setItem(lsKey, JSON.stringify(existing));
+      btn.disabled    = true;
       btn.textContent = '✓ 검증 추가됨';
       btn.classList.add('done');
     } catch(e) {
@@ -1936,7 +1950,6 @@
       setTimeout(() => {
         btn.textContent = '📌 검증 추가';
         btn.classList.remove('err');
-        btn.disabled = false;
       }, 2500);
     }
   }
