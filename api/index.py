@@ -195,6 +195,68 @@ def current_prices():
     return jsonify({"prices": results})
 
 
+@app.route("/api/track-manual-add", methods=["POST"])
+def track_manual_add():
+    import re as _re, datetime as _dt
+    data   = request.get_json(force=True)
+    market = (data.get("market") or "kr").lower()
+    today  = _dt.date.today().isoformat()
+
+    symbol = data.get("symbol", "")
+    code   = _re.sub(r'\.(KS|KQ)$', '', symbol, flags=_re.IGNORECASE) if market == "kr" else symbol
+
+    def _num(v):
+        if v is None: return 0.0
+        try: return float(v)
+        except Exception: return 0.0
+
+    entry_price      = _num(data.get("entry_price_num"))
+    target_price_raw = _num(data.get("target_price_num"))
+    stop_loss_raw    = _num(data.get("stop_loss_num"))
+    current_price    = _num(data.get("current_price_num")) or entry_price
+    investment_horizon = data.get("investment_horizon") or "단기"
+    is_long   = "중장기" in investment_horizon
+    hold_period = "3~12개월" if is_long else "1~3개월"
+    max_days    = 365 if is_long else 90
+    ret_pct = round((current_price - entry_price) / entry_price * 100, 2) if entry_price else 0.0
+
+    record = {
+        "rec_date":          today,
+        "code":              code,
+        "name":              data.get("name") or code,
+        "entry_price":       entry_price,
+        "target_price_raw":  target_price_raw,
+        "stop_loss_raw":     stop_loss_raw,
+        "target_str":        data.get("target_price_str") or "",
+        "stop_loss_str":     data.get("stop_loss_str")    or "",
+        "investment_horizon": investment_horizon,
+        "hold_period":       hold_period,
+        "max_days":          max_days,
+        "status":            "진행중",
+        "current_price":     current_price,
+        "current_return_pct": ret_pct,
+        "last_updated":      today,
+        "exit_date":         None,
+        "exit_price":        None,
+        "exit_return_pct":   None,
+        "source":            "manual",
+    }
+
+    fname = "track_us.json" if market == "us" else "track_kr.json"
+    path  = os.path.join(_HERE, "data", fname)
+    try:
+        with open(path, encoding="utf-8") as f:
+            existing = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        existing = {"records": []}
+
+    existing["records"].append(record)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
+
+    return jsonify({"success": True, "record": record})
+
+
 @app.route("/api/stock-search", methods=["POST"])
 def stock_search():
     data  = request.get_json(force=True)

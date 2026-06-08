@@ -518,6 +518,13 @@
     .vmt-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
     .vmt-btn.active { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-color: transparent; }
 
+    /* ── 검증 추가 버튼 ── */
+    .sr-track-btn { margin-top: 0.45rem; padding: 0.35rem 0.85rem; border: 1.5px solid #6b46c1; border-radius: 8px; background: white; color: #6b46c1; font-size: 0.78rem; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .sr-track-btn:hover { background: #6b46c1; color: white; }
+    .sr-track-btn.done  { background: #e9d8fd; color: #6b46c1; border-color: #e9d8fd; cursor: default; }
+    .sr-track-btn.err   { background: #fff5f5; color: #c53030; border-color: #fed7d7; cursor: default; }
+    .vt-manual-badge { font-size: 0.66rem; background: #e9d8fd; color: #6b46c1; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+
     /* ── 주가 차트 ── */
     .sr-chart-wrap { margin-top: 1.4rem; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 1rem 1.2rem 0.8rem; }
     .sr-chart-title { font-size: 0.82rem; font-weight: 700; color: #4a5568; margin-bottom: 0.7rem; display: flex; align-items: center; gap: 0.4rem; }
@@ -1137,7 +1144,7 @@
       const horiz = r.investment_horizon || r.hold_period || '-';
       return `<tr>
         <td>${r.rec_date}</td>
-        <td class="vt-name-cell" onclick="openVerifyModal('${r.rec_date}', '${r.code}')"><b>${r.name}</b><br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
+        <td class="vt-name-cell" onclick="openVerifyModal('${r.rec_date}', '${r.code}')"><b>${r.name}</b>${r.source === 'manual' ? '<span class="vt-manual-badge">직접분석</span>' : ''}<br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
         <td>${horiz}</td>
         <td>${entryPrice}</td>
         <td style="color:#276749">${tgt}</td>
@@ -1767,6 +1774,7 @@
         ${d.scenario_bear ? `<div class="sr-scenario bear"><span class="sr-scenario-icon">🔴</span><div><div class="sr-scenario-label">비관</div>${d.scenario_bear}</div></div>` : ''}
       </div>` : '';
 
+    window._lastTrackData = d;
     container.innerHTML = `
       <div class="sr-card">
         <div class="sr-card-header">
@@ -1779,6 +1787,7 @@
           <div class="sr-action-wrap">
             <div class="sr-action ${action.cls}">${action.icon}</div>
             <div class="sr-action-reason">${d.action_reason || ''}</div>
+            <button class="sr-track-btn" id="sr-track-btn" onclick="trackAnalysis(this)">📌 검증 추가</button>
           </div>
         </div>
 
@@ -1877,6 +1886,58 @@
     // 차트 비동기 로드
     if (d.yf_data && d.yf_data.symbol) {
       loadStockChart(d.yf_data.symbol);
+    }
+  }
+
+  function _parsePrice(str) {
+    if (!str && str !== 0) return 0;
+    // 괄호 안 내용 제거 후 숫자·소수점만 추출
+    const clean = String(str).replace(/\(.*?\)/g, '').replace(/[^0-9.]/g, '');
+    return parseFloat(clean) || 0;
+  }
+
+  async function trackAnalysis(btn) {
+    const d = window._lastTrackData;
+    if (!d) return;
+    btn.disabled = true;
+    btn.textContent = '등록 중...';
+
+    const market        = (d.market || 'KR').toLowerCase();
+    const symbol        = (d.yf_data && d.yf_data.symbol) || d.code || '';
+    const entryNum      = _parsePrice(d.entry_price)  || (d.yf_data && d.yf_data.price) || 0;
+    const targetNum     = _parsePrice(d.target_price);
+    const stopNum       = _parsePrice(d.stop_loss);
+    const currentNum    = (d.yf_data && d.yf_data.price) || entryNum;
+
+    try {
+      const r = await fetch('/api/track-manual-add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          market,
+          symbol,
+          name:             d.name    || d.code || '',
+          entry_price_num:  entryNum,
+          target_price_num: targetNum,
+          stop_loss_num:    stopNum,
+          current_price_num: currentNum,
+          target_price_str: d.target_price || '',
+          stop_loss_str:    d.stop_loss    || '',
+          investment_horizon: d.investment_horizon || '단기',
+        })
+      });
+      const res = await r.json();
+      if (!res.success) throw new Error(res.error || '등록 실패');
+      btn.textContent = '✓ 검증 추가됨';
+      btn.classList.add('done');
+    } catch(e) {
+      btn.textContent = '등록 실패';
+      btn.classList.add('err');
+      setTimeout(() => {
+        btn.textContent = '📌 검증 추가';
+        btn.classList.remove('err');
+        btn.disabled = false;
+      }, 2500);
     }
   }
 
