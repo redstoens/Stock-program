@@ -1373,11 +1373,11 @@
 
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 주요 뉴스 Top 10</div>
-        <div class="news-toolbar-sub">Gemini가 시장 영향력 기준으로 선별</div></div>
+        <div><div class="news-toolbar-title">📰 주식 최신 뉴스 Top 20</div>
+        <div class="news-toolbar-sub">국내·해외 주식 관련 최신순</div></div>
         <button class="btn-news-refresh" disabled>⏳ 로딩중...</button>
       </div>
-      <div class="news-loading">뉴스를 불러오는 중입니다...<br/><small style="color:#a0aec0">Gemini 분석 포함 약 5~10초 소요됩니다</small></div>`;
+      <div class="news-loading">뉴스를 불러오는 중입니다...</div>`;
 
     try {
       const res  = await fetch('/api/news');
@@ -1396,19 +1396,15 @@
     }
     const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     const cards = items.map((item, i) => {
-      const rank  = i + 1;
-      const top3  = rank <= 3 ? ' top3' : '';
-      const pub   = item.published ? _relTime(item.published) : '';
-      const src   = item.source ? `${item.source}${pub ? ' · ' + pub : ''}` : pub;
-      const comment = item.comment
-        ? `<span class="news-comment">💬 ${item.comment}</span><br/>`
-        : '';
+      const rank = i + 1;
+      const top3 = rank <= 3 ? ' top3' : '';
+      const pub  = item.published ? _relTime(item.published) : '';
+      const src  = item.source ? `${item.source}${pub ? ' · ' + pub : ''}` : pub;
       const href = item.url ? `href="${item.url}" target="_blank" rel="noopener"` : '';
       return `
         <div class="news-card">
           <span class="news-rank${top3}">${rank}</span>
           <div class="news-body">
-            ${comment}
             <a class="news-title" ${href}>${item.title}</a>
             ${src ? `<span class="news-meta">${src}</span>` : ''}
           </div>
@@ -1417,8 +1413,8 @@
 
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 주요 뉴스 Top 10</div>
-        <div class="news-toolbar-sub">Gemini 선별 · ${now} 기준</div></div>
+        <div><div class="news-toolbar-title">📰 주식 최신 뉴스 Top 20</div>
+        <div class="news-toolbar-sub">최신순 · ${now} 기준</div></div>
         <button class="btn-news-refresh" onclick="loadNewsSection(true)">🔄 새로고침</button>
       </div>
       ${cards}`;
