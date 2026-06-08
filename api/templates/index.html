@@ -431,7 +431,8 @@
   let currentVerifyFilter = 'all';
   let verifyDateFrom = '';
   let verifyDateTo   = '';
-  let favs = new Set(JSON.parse(localStorage.getItem('stock-favs') || '[]'));
+  let favs     = new Set(JSON.parse(localStorage.getItem('stock-favs') || '[]'));
+  let favData  = JSON.parse(localStorage.getItem('stock-fav-data') || '{}');
   let cachedStocks = { kr: [], us: [] };
 
   const RISK_CLASS = { '하': 'badge-risk-low', '중': 'badge-risk-mid', '상': 'badge-risk-hi' };
@@ -733,6 +734,12 @@
 
       reportMarkdown = data.report;
       cachedStocks[currentMarket] = data.stocks;
+      // 즐겨찾기 데이터 최신 정보로 갱신
+      data.stocks.forEach(s => {
+        const key = `${currentMarket}:${s.code}`;
+        if (favs.has(key)) { favData[key] = s; }
+      });
+      localStorage.setItem('stock-fav-data', JSON.stringify(favData));
       renderHistory(data.overlaps, data.prev_date);
       renderSectorBar(data.stocks);
       renderStocks(data.stocks, '단기', 'short-section', currentMarket);
@@ -771,6 +778,12 @@
 
       reportMarkdown = data.report;
       cachedStocks[currentMarket] = data.stocks;
+      // 즐겨찾기 데이터 최신 정보로 갱신
+      data.stocks.forEach(s => {
+        const key = `${currentMarket}:${s.code}`;
+        if (favs.has(key)) { favData[key] = s; }
+      });
+      localStorage.setItem('stock-fav-data', JSON.stringify(favData));
       renderHistory(data.overlaps, data.prev_date);
       renderSectorBar(data.stocks);
       renderStocks(data.stocks, '단기', 'short-section', currentMarket);
@@ -1106,7 +1119,27 @@
     });
   }
 
-  window.addEventListener('load', () => { loadCachedData(); updateFavTab(); });
+  window.addEventListener('load', () => {
+    loadCachedData();
+    updateFavTab();
+    // 즐겨찾기 탭을 위해 반대 시장 데이터도 백그라운드 로드
+    const otherMarket = currentMarket === 'kr' ? 'us' : 'kr';
+    fetch(`/api/cached-${otherMarket}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.stocks) {
+          cachedStocks[otherMarket] = data.stocks;
+          // favData 최신 데이터로 갱신
+          data.stocks.forEach(s => {
+            const key = `${otherMarket}:${s.code}`;
+            if (favs.has(key)) {
+              favData[key] = s;
+            }
+          });
+          localStorage.setItem('stock-fav-data', JSON.stringify(favData));
+        }
+      }).catch(() => {});
+  });
 
   // ── 즐겨찾기 ──────────────────────────────────────────────────
   function updateFavTab() {
@@ -1115,9 +1148,18 @@
   }
 
   function toggleFav(key) {
-    if (favs.has(key)) favs.delete(key);
-    else favs.add(key);
+    const [mkt, code] = key.split(':');
+    if (favs.has(key)) {
+      favs.delete(key);
+      delete favData[key];
+    } else {
+      favs.add(key);
+      // 현재 카드 데이터를 localStorage에 저장 (새로고침 후에도 표시)
+      const stock = (cachedStocks[mkt] || []).find(s => s.code === code);
+      if (stock) favData[key] = stock;
+    }
     localStorage.setItem('stock-favs', JSON.stringify([...favs]));
+    localStorage.setItem('stock-fav-data', JSON.stringify(favData));
     updateFavTab();
     document.querySelectorAll(`[data-fav-key="${key}"]`).forEach(btn => {
       const on = favs.has(key);
@@ -1135,10 +1177,19 @@
       sec.innerHTML = '<div class="fav-empty">아직 즐겨찾기한 종목이 없습니다.<br/>카드의 ☆ 버튼을 눌러 추가하세요.</div>';
       return;
     }
-    const krFavs = cachedStocks.kr.filter(s => favs.has(`kr:${s.code}`));
-    const usFavs = cachedStocks.us.filter(s => favs.has(`us:${s.code}`));
+    // cachedStocks 우선 (최신 데이터), 없으면 저장된 favData 사용
+    const resolve = (mkt) => [...favs]
+      .filter(k => k.startsWith(mkt + ':'))
+      .map(k => {
+        const code = k.slice(mkt.length + 1);
+        return (cachedStocks[mkt] || []).find(s => s.code === code) || favData[k];
+      })
+      .filter(Boolean);
+
+    const krFavs = resolve('kr');
+    const usFavs = resolve('us');
     if (krFavs.length === 0 && usFavs.length === 0) {
-      sec.innerHTML = '<div class="fav-empty">국내/미국주 탭을 먼저 열면<br/>즐겨찾기한 종목 카드가 여기에 표시됩니다.</div>';
+      sec.innerHTML = '<div class="fav-empty">즐겨찾기한 종목 데이터를 불러올 수 없습니다.<br/>국내/미국주 탭에서 ☆ 버튼을 눌러 추가하세요.</div>';
       return;
     }
     sec.innerHTML = `
