@@ -94,25 +94,39 @@ def _fetch_raw(limit: int = 30) -> list[dict]:
     return deduped[:limit]
 
 
-def _analyze_sentiment(news_list: list[dict]) -> list[dict]:
+def _analyze_sentiment(news_list: list[dict]) -> tuple[list[dict], list[dict]]:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         for item in news_list:
             item.update({"sector": "기타", "sentiment": "중립", "reason": ""})
-        return news_list
+        return news_list, []
 
     lines = [f"{i+1}. {it['title']} ({it['source']})" for i, it in enumerate(news_list)]
     prompt = f"""다음은 오늘의 주식·금융 관련 뉴스 목록입니다.
-각 뉴스가 어떤 주식 섹터에 영향을 주는지, 그 영향이 긍정인지 부정인지 분석하세요.
 
 {chr(10).join(lines)}
 
-섹터 분류 (반드시 아래 중 하나 선택): {SECTORS}
-감성: 긍정 / 부정 / 중립 중 하나
-이유: 투자자 관점 15자 이내
+다음 두 가지를 분석하세요.
+
+[1] 각 뉴스 기사별 분석
+- sector: 섹터 분류 (반드시 아래 중 하나): {SECTORS}
+- sentiment: 긍정 / 부정 / 중립 중 하나
+- reason: 투자자 관점 15자 이내
+
+[2] 오늘 실질적으로 영향받는 섹터 분석 (뉴스에서 실제 이슈가 있는 섹터만 포함, 최대 8개)
+- sector: 섹터명 (위 분류 기준)
+- direction: 상승압력 / 하락압력 / 중립 중 하나
+- summary: 해당 섹터에 영향을 주는 핵심 이슈 한 줄 (30자 이내)
+- stocks: 직접 영향받는 대표 종목명 최대 4개 (한국 또는 미국 상장사, 종목명만)
 
 다음 JSON 형식으로만 반환하세요:
-{{"items": [{{"idx": 1, "sector": "반도체", "sentiment": "긍정", "reason": "AI 수요 증가 수혜"}}, ...]}}"""
+{{
+  "items": [{{"idx": 1, "sector": "반도체", "sentiment": "긍정", "reason": "AI 수요 증가 수혜"}}, ...],
+  "sector_impacts": [
+    {{"sector": "반도체", "direction": "상승압력", "summary": "미국 AI 투자 확대로 HBM 수요 급증", "stocks": ["SK하이닉스", "삼성전자"]}},
+    ...
+  ]
+}}"""
 
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
@@ -120,7 +134,7 @@ def _analyze_sentiment(news_list: list[dict]) -> list[dict]:
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            temperature=0.1,
+            temperature=0.15,
         ),
     )
     data = json.loads(response.text)
@@ -131,7 +145,9 @@ def _analyze_sentiment(news_list: list[dict]) -> list[dict]:
         item["sector"]    = info.get("sector", "기타")
         item["sentiment"] = info.get("sentiment", "중립")
         item["reason"]    = info.get("reason", "")
-    return news_list
+
+    sector_impacts = data.get("sector_impacts", [])
+    return news_list, sector_impacts
 
 
 def _build_sector_summary(news_list: list[dict]) -> dict:
@@ -154,7 +170,7 @@ def _build_sector_summary(news_list: list[dict]) -> dict:
 def fetch_news_with_sentiment(limit: int = 20) -> dict:
     news = _fetch_raw(limit)
     if not news:
-        return {"news": [], "sector_summary": {}}
-    news = _analyze_sentiment(news)
+        return {"news": [], "sector_summary": {}, "sector_impacts": []}
+    news, sector_impacts = _analyze_sentiment(news)
     sector_summary = _build_sector_summary(news)
-    return {"news": news, "sector_summary": sector_summary}
+    return {"news": news, "sector_summary": sector_summary, "sector_impacts": sector_impacts}

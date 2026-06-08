@@ -138,14 +138,32 @@
     .btn-news-refresh { padding: 0.3rem 0.8rem; border: 1.5px solid #bee3f8; border-radius: 8px; background: white; font-size: 0.78rem; font-weight: 600; color: #2b6cb0; cursor: pointer; transition: all 0.15s; }
     .btn-news-refresh:hover { background: #ebf8ff; }
     .btn-news-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-    /* 섹터 감성 대시보드 */
-    .news-sector-dash { background: white; border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
-    .nsd-title { font-size: 0.75rem; font-weight: 700; color: #4a5568; margin-bottom: 0.65rem; }
-    .nsd-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-    .nsd-item { display: flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; border: 1.5px solid; cursor: default; }
-    .nsd-pos  { background: #f0fff4; color: #276749; border-color: #9ae6b4; }
-    .nsd-neg  { background: #fff5f5; color: #9b2c2c; border-color: #feb2b2; }
-    .nsd-neu  { background: #f7fafc; color: #718096; border-color: #e2e8f0; }
+    /* 섹터 실시간 이슈 카드 */
+    .si-section { margin-bottom: 1.2rem; }
+    .si-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem; }
+    .si-title { font-size: 0.8rem; font-weight: 800; color: #2d3748; }
+    .si-subtitle { font-size: 0.7rem; color: #718096; }
+    .si-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.65rem; }
+    .si-card { background: white; border-radius: 12px; padding: 0.85rem 1rem; box-shadow: 0 1px 6px rgba(0,0,0,0.08); border-top: 3px solid #e2e8f0; transition: transform 0.15s, box-shadow 0.15s; }
+    .si-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .si-card.dir-up   { border-top-color: #48bb78; }
+    .si-card.dir-down { border-top-color: #fc8181; }
+    .si-card.dir-neu  { border-top-color: #a0aec0; }
+    .si-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
+    .si-sector-name { font-size: 0.82rem; font-weight: 800; color: #2d3748; }
+    .si-dir-badge { font-size: 0.68rem; font-weight: 700; padding: 0.18rem 0.5rem; border-radius: 999px; }
+    .si-dir-badge.up   { background: #f0fff4; color: #276749; }
+    .si-dir-badge.down { background: #fff5f5; color: #9b2c2c; }
+    .si-dir-badge.neu  { background: #f7fafc; color: #718096; }
+    .si-summary { font-size: 0.75rem; color: #4a5568; line-height: 1.45; margin-bottom: 0.55rem; }
+    .si-stocks { display: flex; flex-wrap: wrap; gap: 0.28rem; }
+    .si-stock-chip { font-size: 0.68rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; background: #ebf8ff; color: #2b6cb0; border: 1px solid #bee3f8; }
+    /* 뉴스 목록 토글 */
+    .news-list-toggle { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.65rem; cursor: pointer; user-select: none; }
+    .news-list-toggle-label { font-size: 0.78rem; font-weight: 700; color: #4a5568; }
+    .news-list-toggle-arrow { font-size: 0.7rem; color: #a0aec0; transition: transform 0.2s; }
+    .news-list-toggle-arrow.open { transform: rotate(180deg); }
+    /* 섹터 감성 대시보드 (하위 호환) */
     .nsd-dot  { font-size: 0.65rem; }
     .nsd-cnt  { font-size: 0.7em; opacity: 0.75; }
     /* 뉴스 카드 */
@@ -1421,12 +1439,11 @@
   async function loadNewsSection(force = false) {
     const sec = document.getElementById('news-section');
 
-    // localStorage 캐시 확인 (1시간)
     if (!force) {
       try {
         const cached = JSON.parse(localStorage.getItem(NEWS_CACHE_KEY) || 'null');
         if (cached && (Date.now() - cached.ts < NEWS_CACHE_TTL)) {
-          renderNews(cached.news, cached.sector_summary, sec);
+          renderNews(cached.news, cached.sector_summary, cached.sector_impacts || [], sec);
           return;
         }
       } catch(e) {}
@@ -1434,8 +1451,8 @@
 
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 이슈 분석 Top 20</div>
-        <div class="news-toolbar-sub">섹터별 영향 분석 중...</div></div>
+        <div><div class="news-toolbar-title">📡 섹터 실시간 이슈</div>
+        <div class="news-toolbar-sub">AI 분석 중...</div></div>
         <button class="btn-news-refresh" disabled>⏳ 분석중...</button>
       </div>
       <div class="news-loading">최신 뉴스를 긁어오고 있습니다...<br/><small style="color:#a0aec0">AI 섹터 분석 포함 약 5~10초 소요됩니다</small></div>`;
@@ -1443,40 +1460,56 @@
     try {
       const res  = await fetch('/api/news');
       const data = await res.json();
-      const news    = data.news || [];
-      const summary = data.sector_summary || {};
-      // 캐시 저장
-      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ts: Date.now(), news, sector_summary: summary}));
-      renderNews(news, summary, sec);
+      const news           = data.news || [];
+      const summary        = data.sector_summary || {};
+      const sector_impacts = data.sector_impacts || [];
+      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ts: Date.now(), news, sector_summary: summary, sector_impacts}));
+      renderNews(news, summary, sector_impacts, sec);
     } catch(e) {
       sec.innerHTML = `<div class="news-empty">뉴스를 불러오지 못했습니다.<br/><small>${e.message}</small></div>`;
     }
   }
 
-  function renderNewsSectorDash(summary) {
-    const sectors = Object.entries(summary).sort((a, b) => {
-      const score = x => x.pos - x.neg;
-      return score(b[1]) - score(a[1]);
+  function renderSectorImpacts(impacts) {
+    if (!impacts || !impacts.length) return '';
+    const DIR = {
+      '상승압력': {cls: 'up',   badge: 'up',   icon: '▲', label: '상승압력'},
+      '하락압력': {cls: 'down', badge: 'down', icon: '▼', label: '하락압력'},
+      '중립':     {cls: 'neu',  badge: 'neu',  icon: '◆', label: '중립'},
+    };
+    const sorted = [...impacts].sort((a, b) => {
+      const order = {'하락압력': 0, '상승압력': 1, '중립': 2};
+      return (order[a.direction] ?? 3) - (order[b.direction] ?? 3);
     });
-    if (!sectors.length) return '';
-
-    const pills = sectors.map(([name, s]) => {
-      const total = s.pos + s.neg + s.neu;
-      let cls, dot, label;
-      if (s.pos > s.neg)       { cls = 'nsd-pos'; dot = '🟢'; label = `긍정 ${s.pos}`; }
-      else if (s.neg > s.pos)  { cls = 'nsd-neg'; dot = '🔴'; label = `부정 ${s.neg}`; }
-      else                     { cls = 'nsd-neu'; dot = '⚪'; label = `중립`; }
-      return `<span class="nsd-item ${cls}"><span class="nsd-dot">${dot}</span>${name}<span class="nsd-cnt">${total}</span></span>`;
+    const cards = sorted.map(item => {
+      const d = DIR[item.direction] || DIR['중립'];
+      const stockChips = (item.stocks || []).map(s =>
+        `<span class="si-stock-chip">${s}</span>`
+      ).join('');
+      return `
+        <div class="si-card dir-${d.cls}">
+          <div class="si-card-head">
+            <span class="si-sector-name">${item.sector}</span>
+            <span class="si-dir-badge ${d.badge}">${d.icon} ${d.label}</span>
+          </div>
+          <div class="si-summary">${item.summary || ''}</div>
+          ${stockChips ? `<div class="si-stocks">${stockChips}</div>` : ''}
+        </div>`;
     }).join('');
 
     return `
-      <div class="news-sector-dash">
-        <div class="nsd-title">📊 오늘의 섹터별 이슈 현황</div>
-        <div class="nsd-grid">${pills}</div>
+      <div class="si-section">
+        <div class="si-header">
+          <span class="si-title">📡 섹터별 실시간 이슈</span>
+          <span class="si-subtitle">AI 분석 · 오늘의 영향 섹터</span>
+        </div>
+        <div class="si-grid">${cards}</div>
       </div>`;
   }
 
-  function renderNews(items, summary, sec) {
+  let _newsListOpen = true;
+
+  function renderNews(items, summary, impacts, sec) {
     if (!items.length) {
       sec.innerHTML = '<div class="news-empty">뉴스 데이터가 없습니다.</div>';
       return;
@@ -1500,18 +1533,14 @@
       const cardCls  = sent === '긍정' ? ' sent-pos' : sent === '부정' ? ' sent-neg' : '';
       const sector   = item.sector || '';
       const reason   = item.reason || '';
-
-      const badges = `
-        <div class="news-badges">
-          ${sector ? `<span class="news-sector-badge">${sector}</span>` : ''}
-          <span class="news-sent-badge ${sentMeta.cls}">${sentMeta.label}</span>
-        </div>`;
-
       return `
         <div class="news-card${cardCls}">
           <span class="news-rank${top3}">${rank}</span>
           <div class="news-body">
-            ${badges}
+            <div class="news-badges">
+              ${sector ? `<span class="news-sector-badge">${sector}</span>` : ''}
+              <span class="news-sent-badge ${sentMeta.cls}">${sentMeta.label}</span>
+            </div>
             <a class="news-title" ${href}>${item.title}</a>
             ${reason ? `<div class="news-reason">💬 ${reason}</div>` : ''}
             ${src ? `<span class="news-meta">${src}</span>` : ''}
@@ -1519,14 +1548,27 @@
         </div>`;
     }).join('');
 
+    const arrowCls = _newsListOpen ? 'open' : '';
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 이슈 분석 Top 20</div>
-        <div class="news-toolbar-sub">AI 섹터 감성 분석 · ${now} 기준</div></div>
+        <div><div class="news-toolbar-title">📡 섹터 실시간 이슈</div>
+        <div class="news-toolbar-sub">AI 분석 · ${now} 기준</div></div>
         <button class="btn-news-refresh" onclick="loadNewsSection(true)">🔄 새로고침</button>
       </div>
-      ${renderNewsSectorDash(summary)}
-      ${cards}`;
+      ${renderSectorImpacts(impacts)}
+      <div class="news-list-toggle" onclick="_toggleNewsList(this)">
+        <span class="news-list-toggle-label">📰 뉴스 목록 Top ${items.length}</span>
+        <span class="news-list-toggle-arrow ${arrowCls}">▲</span>
+      </div>
+      <div id="news-list-body" style="${_newsListOpen ? '' : 'display:none'}">${cards}</div>`;
+  }
+
+  function _toggleNewsList(el) {
+    _newsListOpen = !_newsListOpen;
+    const body  = document.getElementById('news-list-body');
+    const arrow = el.querySelector('.news-list-toggle-arrow');
+    if (body)  body.style.display = _newsListOpen ? '' : 'none';
+    if (arrow) arrow.classList.toggle('open', _newsListOpen);
   }
 
   function _relTime(pubStr) {
