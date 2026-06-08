@@ -118,12 +118,14 @@ def market_index():
         except Exception:
             return None
 
-    with ThreadPoolExecutor(max_workers=2) as ex:
-        f_kr = ex.submit(_fetch, "^KS11")
-        f_us = ex.submit(_fetch, "^GSPC")
-        kr, us = f_kr.result(), f_us.result()
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        f_kr  = ex.submit(_fetch, "^KS11")
+        f_kq  = ex.submit(_fetch, "^KQ11")
+        f_sp  = ex.submit(_fetch, "^GSPC")
+        f_nq  = ex.submit(_fetch, "^IXIC")
+        kr, kq, sp, nq = f_kr.result(), f_kq.result(), f_sp.result(), f_nq.result()
 
-    return jsonify({"kr": kr, "us": us})
+    return jsonify({"kr": kr, "kq": kq, "sp": sp, "nq": nq})
 
 
 @app.route("/api/analyze-us", methods=["POST"])

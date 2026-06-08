@@ -345,7 +345,9 @@
   <p>KOSPI 대형주 중 기업가치 대비 저평가된 우량 가치주 5개를 자동 선정합니다</p>
   <div class="index-ticker" id="index-ticker">
     <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">KOSPI</span><span class="idx-price" id="idx-kr-price">—</span><span class="idx-chg flat" id="idx-kr-chg">로딩중</span></div>
-    <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">S&amp;P 500</span><span class="idx-price" id="idx-us-price">—</span><span class="idx-chg flat" id="idx-us-chg">로딩중</span></div>
+    <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">KOSDAQ</span><span class="idx-price" id="idx-kq-price">—</span><span class="idx-chg flat" id="idx-kq-chg">로딩중</span></div>
+    <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">S&amp;P 500</span><span class="idx-price" id="idx-sp-price">—</span><span class="idx-chg flat" id="idx-sp-chg">로딩중</span></div>
+    <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">NASDAQ</span><span class="idx-price" id="idx-nq-price">—</span><span class="idx-chg flat" id="idx-nq-chg">로딩중</span></div>
   </div>
 </header>
 
@@ -1189,9 +1191,11 @@
       const res  = await fetch('/api/market-index');
       const data = await res.json();
       _setIdx('idx-kr-price', 'idx-kr-chg', data.kr);
-      _setIdx('idx-us-price', 'idx-us-chg', data.us);
+      _setIdx('idx-kq-price', 'idx-kq-chg', data.kq);
+      _setIdx('idx-sp-price', 'idx-sp-chg', data.sp);
+      _setIdx('idx-nq-price', 'idx-nq-chg', data.nq);
     } catch(e) {
-      ['idx-kr-chg','idx-us-chg'].forEach(id => {
+      ['idx-kr-chg','idx-kq-chg','idx-sp-chg','idx-nq-chg'].forEach(id => {
         const el = document.getElementById(id);
         el.textContent = '오류'; el.className = 'idx-chg flat';
       });
