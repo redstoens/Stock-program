@@ -5,7 +5,9 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, request, jsonify, render_template
+import yfinance as yf
 from scraper import fetch_kospi_stocks, fetch_stock_detail, format_for_prompt
 from scraper_us import fetch_sp500_stocks, format_for_prompt_us
 from analyzer import analyze_stocks
@@ -101,6 +103,27 @@ def analyze():
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route("/api/market-index")
+def market_index():
+    def _fetch(symbol):
+        try:
+            info = yf.Ticker(symbol).fast_info
+            price = info.last_price or info.regular_market_price or 0
+            prev  = info.previous_close or price
+            change     = round(price - prev, 2)
+            change_pct = round((change / prev * 100), 2) if prev else 0
+            return {"price": round(price, 2), "change": change, "change_pct": change_pct}
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_kr = ex.submit(_fetch, "^KS11")
+        f_us = ex.submit(_fetch, "^GSPC")
+        kr, us = f_kr.result(), f_us.result()
+
+    return jsonify({"kr": kr, "us": us})
 
 
 @app.route("/api/analyze-us", methods=["POST"])
