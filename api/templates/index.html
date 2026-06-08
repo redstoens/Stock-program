@@ -123,15 +123,34 @@
     .btn-news-refresh { padding: 0.3rem 0.8rem; border: 1.5px solid #bee3f8; border-radius: 8px; background: white; font-size: 0.78rem; font-weight: 600; color: #2b6cb0; cursor: pointer; transition: all 0.15s; }
     .btn-news-refresh:hover { background: #ebf8ff; }
     .btn-news-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
-    .news-card { background: white; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.65rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; gap: 0.8rem; align-items: flex-start; border-left: 3px solid #e2e8f0; transition: border-color 0.15s; }
-    .news-card:hover { border-left-color: #2b6cb0; }
-    .news-rank { font-size: 1rem; font-weight: 800; color: #cbd5e0; min-width: 1.4rem; text-align: center; line-height: 1.3; }
+    /* 섹터 감성 대시보드 */
+    .news-sector-dash { background: white; border-radius: 10px; padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .nsd-title { font-size: 0.75rem; font-weight: 700; color: #4a5568; margin-bottom: 0.65rem; }
+    .nsd-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .nsd-item { display: flex; align-items: center; gap: 0.3rem; padding: 0.28rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; border: 1.5px solid; cursor: default; }
+    .nsd-pos  { background: #f0fff4; color: #276749; border-color: #9ae6b4; }
+    .nsd-neg  { background: #fff5f5; color: #9b2c2c; border-color: #feb2b2; }
+    .nsd-neu  { background: #f7fafc; color: #718096; border-color: #e2e8f0; }
+    .nsd-dot  { font-size: 0.65rem; }
+    .nsd-cnt  { font-size: 0.7em; opacity: 0.75; }
+    /* 뉴스 카드 */
+    .news-card { background: white; border-radius: 10px; padding: 0.8rem 1rem; margin-bottom: 0.55rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; gap: 0.75rem; align-items: flex-start; border-left: 3px solid #e2e8f0; transition: border-color 0.15s; }
+    .news-card.sent-pos { border-left-color: #68d391; }
+    .news-card.sent-neg { border-left-color: #fc8181; }
+    .news-card:hover { filter: brightness(0.98); }
+    .news-rank { font-size: 0.95rem; font-weight: 800; color: #cbd5e0; min-width: 1.4rem; text-align: center; line-height: 1.4; }
     .news-rank.top3 { color: #2b6cb0; }
     .news-body { flex: 1; min-width: 0; }
-    .news-title { font-size: 0.88rem; font-weight: 600; color: #1a202c; line-height: 1.45; text-decoration: none; display: block; margin-bottom: 0.3rem; }
+    .news-badges { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
+    .news-sector-badge { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; background: #ebf8ff; color: #2b6cb0; }
+    .news-sent-badge { font-size: 0.7rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 4px; }
+    .nsb-pos { background: #f0fff4; color: #276749; }
+    .nsb-neg { background: #fff5f5; color: #9b2c2c; }
+    .nsb-neu { background: #f7fafc; color: #718096; }
+    .news-reason { font-size: 0.72rem; color: #718096; margin-bottom: 0.25rem; }
+    .news-title { font-size: 0.87rem; font-weight: 600; color: #1a202c; line-height: 1.45; text-decoration: none; display: block; margin-bottom: 0.25rem; }
     .news-title:hover { color: #2b6cb0; }
-    .news-comment { font-size: 0.77rem; color: #276749; background: #f0fff4; border-radius: 4px; padding: 0.15rem 0.45rem; display: inline-block; margin-bottom: 0.3rem; font-weight: 600; }
-    .news-meta { font-size: 0.72rem; color: #a0aec0; }
+    .news-meta { font-size: 0.71rem; color: #a0aec0; }
     .news-empty { text-align: center; color: #a0aec0; padding: 3rem 1rem; font-size: 0.95rem; }
     .news-loading { text-align: center; padding: 3rem 1rem; color: #718096; font-size: 0.9rem; }
 
@@ -1364,48 +1383,105 @@
   }
 
   // ── 뉴스 탭 ──────────────────────────────────────────────────
-  let newsLoadedAt = null;
+  const NEWS_CACHE_KEY = 'stock-news-cache';
+  const NEWS_CACHE_TTL = 60 * 60 * 1000; // 1시간
 
   async function loadNewsSection(force = false) {
     const sec = document.getElementById('news-section');
-    // 5분 이내 로드된 데이터는 재사용
-    if (!force && newsLoadedAt && (Date.now() - newsLoadedAt < 5 * 60 * 1000) && sec.querySelector('.news-card')) return;
+
+    // localStorage 캐시 확인 (1시간)
+    if (!force) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(NEWS_CACHE_KEY) || 'null');
+        if (cached && (Date.now() - cached.ts < NEWS_CACHE_TTL)) {
+          renderNews(cached.news, cached.sector_summary, sec);
+          return;
+        }
+      } catch(e) {}
+    }
 
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 최신 뉴스 Top 20</div>
-        <div class="news-toolbar-sub">국내·해외 주식 관련 최신순</div></div>
-        <button class="btn-news-refresh" disabled>⏳ 로딩중...</button>
+        <div><div class="news-toolbar-title">📰 주식 이슈 분석 Top 20</div>
+        <div class="news-toolbar-sub">섹터별 영향 분석 중...</div></div>
+        <button class="btn-news-refresh" disabled>⏳ 분석중...</button>
       </div>
-      <div class="news-loading">뉴스를 불러오는 중입니다...</div>`;
+      <div class="news-loading">최신 뉴스를 긁어오고 있습니다...<br/><small style="color:#a0aec0">AI 섹터 분석 포함 약 5~10초 소요됩니다</small></div>`;
 
     try {
       const res  = await fetch('/api/news');
       const data = await res.json();
-      newsLoadedAt = Date.now();
-      renderNews(data.news || [], sec);
+      const news    = data.news || [];
+      const summary = data.sector_summary || {};
+      // 캐시 저장
+      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ts: Date.now(), news, sector_summary: summary}));
+      renderNews(news, summary, sec);
     } catch(e) {
       sec.innerHTML = `<div class="news-empty">뉴스를 불러오지 못했습니다.<br/><small>${e.message}</small></div>`;
     }
   }
 
-  function renderNews(items, sec) {
+  function renderNewsSectorDash(summary) {
+    const sectors = Object.entries(summary).sort((a, b) => {
+      const score = x => x.pos - x.neg;
+      return score(b[1]) - score(a[1]);
+    });
+    if (!sectors.length) return '';
+
+    const pills = sectors.map(([name, s]) => {
+      const total = s.pos + s.neg + s.neu;
+      let cls, dot, label;
+      if (s.pos > s.neg)       { cls = 'nsd-pos'; dot = '🟢'; label = `긍정 ${s.pos}`; }
+      else if (s.neg > s.pos)  { cls = 'nsd-neg'; dot = '🔴'; label = `부정 ${s.neg}`; }
+      else                     { cls = 'nsd-neu'; dot = '⚪'; label = `중립`; }
+      return `<span class="nsd-item ${cls}"><span class="nsd-dot">${dot}</span>${name}<span class="nsd-cnt">${total}</span></span>`;
+    }).join('');
+
+    return `
+      <div class="news-sector-dash">
+        <div class="nsd-title">📊 오늘의 섹터별 이슈 현황</div>
+        <div class="nsd-grid">${pills}</div>
+      </div>`;
+  }
+
+  function renderNews(items, summary, sec) {
     if (!items.length) {
       sec.innerHTML = '<div class="news-empty">뉴스 데이터가 없습니다.</div>';
       return;
     }
     const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+
+    const SENT_META = {
+      '긍정': {cls: 'nsb-pos', label: '🟢 긍정'},
+      '부정': {cls: 'nsb-neg', label: '🔴 부정'},
+      '중립': {cls: 'nsb-neu', label: '⚪ 중립'},
+    };
+
     const cards = items.map((item, i) => {
-      const rank = i + 1;
-      const top3 = rank <= 3 ? ' top3' : '';
-      const pub  = item.published ? _relTime(item.published) : '';
-      const src  = item.source ? `${item.source}${pub ? ' · ' + pub : ''}` : pub;
-      const href = item.url ? `href="${item.url}" target="_blank" rel="noopener"` : '';
+      const rank  = i + 1;
+      const top3  = rank <= 3 ? ' top3' : '';
+      const pub   = item.published ? _relTime(item.published) : '';
+      const src   = item.source ? `${item.source}${pub ? ' · ' + pub : ''}` : pub;
+      const href  = item.url ? `href="${item.url}" target="_blank" rel="noopener"` : '';
+      const sent  = item.sentiment || '중립';
+      const sentMeta = SENT_META[sent] || SENT_META['중립'];
+      const cardCls  = sent === '긍정' ? ' sent-pos' : sent === '부정' ? ' sent-neg' : '';
+      const sector   = item.sector || '';
+      const reason   = item.reason || '';
+
+      const badges = `
+        <div class="news-badges">
+          ${sector ? `<span class="news-sector-badge">${sector}</span>` : ''}
+          <span class="news-sent-badge ${sentMeta.cls}">${sentMeta.label}</span>
+        </div>`;
+
       return `
-        <div class="news-card">
+        <div class="news-card${cardCls}">
           <span class="news-rank${top3}">${rank}</span>
           <div class="news-body">
+            ${badges}
             <a class="news-title" ${href}>${item.title}</a>
+            ${reason ? `<div class="news-reason">💬 ${reason}</div>` : ''}
             ${src ? `<span class="news-meta">${src}</span>` : ''}
           </div>
         </div>`;
@@ -1413,10 +1489,11 @@
 
     sec.innerHTML = `
       <div class="news-toolbar">
-        <div><div class="news-toolbar-title">📰 주식 최신 뉴스 Top 20</div>
-        <div class="news-toolbar-sub">최신순 · ${now} 기준</div></div>
+        <div><div class="news-toolbar-title">📰 주식 이슈 분석 Top 20</div>
+        <div class="news-toolbar-sub">AI 섹터 감성 분석 · ${now} 기준</div></div>
         <button class="btn-news-refresh" onclick="loadNewsSection(true)">🔄 새로고침</button>
       </div>
+      ${renderNewsSectorDash(summary)}
       ${cards}`;
   }
 

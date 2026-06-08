@@ -14,7 +14,7 @@ from analyzer import analyze_stocks
 from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
-from news_fetcher import fetch_stock_news
+from news_fetcher import fetch_news_with_sentiment
 
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
@@ -140,8 +140,8 @@ def current_prices():
 @app.route("/api/news")
 def news():
     try:
-        items = fetch_stock_news()
-        return jsonify({"success": True, "news": items})
+        result = fetch_news_with_sentiment()
+        return jsonify({"success": True, **result})
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
