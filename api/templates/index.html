@@ -257,6 +257,13 @@
     /* 기술적 분석 */
     .sr-technical { font-size: 0.8rem; color: #4a5568; padding: 0.65rem 0.9rem; background: #fffaf0; border-radius: 8px; border-left: 3px solid #ed8936; line-height: 1.55; }
     .sr-data-note { font-size: 0.7rem; color: #a0aec0; text-align: right; }
+    /* 진입가 섹션 */
+    .sr-entry { background: #f0fff4; border-radius: 10px; border: 1.5px solid #9ae6b4; overflow: hidden; }
+    .sr-entry-header { background: #c6f6d5; padding: 0.5rem 0.9rem; font-size: 0.72rem; font-weight: 800; color: #22543d; display: flex; align-items: center; gap: 0.4rem; }
+    .sr-entry-body { padding: 0.75rem 0.9rem; display: grid; grid-template-columns: 5rem 1fr; gap: 0.5rem 0.8rem; align-items: start; }
+    .sr-entry-label { font-size: 0.68rem; font-weight: 700; color: #276749; white-space: nowrap; padding-top: 0.1rem; }
+    .sr-entry-value { font-size: 0.82rem; color: #2d3748; line-height: 1.5; }
+    .sr-entry-price-big { font-size: 1.15rem; font-weight: 900; color: #22543d; }
     @media (max-width: 600px) {
       .sr-3cols { grid-template-columns: 1fr; }
       .sr-info-row { grid-template-columns: 1fr; }
@@ -1797,6 +1804,16 @@
               <div class="sr-info-value">${d.next_earnings || '—'}</div>
             </div>
           </div>
+
+          ${(d.entry_price || d.entry_timing || d.entry_strategy) ? `
+          <div class="sr-entry">
+            <div class="sr-entry-header">🎯 추천 진입가 & 매수 전략</div>
+            <div class="sr-entry-body">
+              ${d.entry_price ? `<span class="sr-entry-label">진입가</span><span class="sr-entry-value sr-entry-price-big">${d.entry_price}</span>` : ''}
+              ${d.entry_timing ? `<span class="sr-entry-label">타이밍</span><span class="sr-entry-value">${d.entry_timing}</span>` : ''}
+              ${d.entry_strategy ? `<span class="sr-entry-label">분할 전략</span><span class="sr-entry-value">${d.entry_strategy}</span>` : ''}
+            </div>
+          </div>` : ''}
 
           ${d.technical ? `<div class="sr-technical">📊 기술적 분석<br/>${d.technical}</div>` : ''}
           ${d.data_note ? `<div class="sr-data-note">⚠ ${d.data_note}</div>` : ''}
