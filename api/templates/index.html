@@ -48,12 +48,16 @@
     /* 섹터 분산 */
     .sector-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 1.2rem; padding: 0.65rem 0.9rem; background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
     .sector-bar-label { font-size: 0.72rem; font-weight: 700; color: #a0aec0; margin-right: 0.15rem; white-space: nowrap; }
-    .sp { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.22rem 0.6rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; border: 1.5px solid; }
+    .sp { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.22rem 0.6rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; border: 1.5px solid; cursor: pointer; transition: all 0.15s; }
+    .sp:hover { filter: brightness(0.93); }
     .sp-1 { background: #f7fafc; color: #718096; border-color: #e2e8f0; }
     .sp-2 { background: #ebf8ff; color: #2b6cb0; border-color: #bee3f8; }
     .sp-3 { background: #e9d8fd; color: #553c9a; border-color: #d6bcfa; }
     .sp-hi { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
     .sp-count { font-size: 0.82em; opacity: 0.75; }
+    .sp.sp-active { box-shadow: 0 0 0 2.5px currentColor; opacity: 1; font-weight: 800; }
+    .sp-reset { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; border: 1.5px solid #fc8181; background: #fff5f5; color: #c53030; cursor: pointer; transition: all 0.15s; }
+    .sp-reset:hover { background: #fed7d7; }
 
     /* 과거 리포트 비교 */
     .history-box { background: #fffbeb; border: 1.5px solid #f6e05e; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
@@ -442,8 +446,10 @@
   let verifyDateFrom = '';
   let verifyDateTo   = '';
   let allTrackRecs   = { kr: [], us: [] };
-  let selectedHistDate = null;
-  let cachedMeta       = { kr: '', us: '' };
+  let selectedHistDate   = null;
+  let activeSectorFilter = null;
+  let sectorFilterStocks = [];
+  let cachedMeta         = { kr: '', us: '' };
   let favs     = new Set(JSON.parse(localStorage.getItem('stock-favs') || '[]'));
   let favData  = JSON.parse(localStorage.getItem('stock-fav-data') || '{}');
   let cachedStocks = { kr: [], us: [] };
@@ -470,7 +476,9 @@
     document.getElementById('long-section').innerHTML     = '';
     document.getElementById('history-section').innerHTML  = '';
     document.getElementById('date-selector-row').innerHTML = '';
-    selectedHistDate = null;
+    selectedHistDate   = null;
+    activeSectorFilter = null;
+    sectorFilterStocks = [];
 
     if (isVerify) {
       currentVerifyMarket = 'kr';
@@ -1371,22 +1379,44 @@
 
   // ── 섹터 분산 바 ──────────────────────────────────────────────
   function renderSectorBar(stocks) {
+    sectorFilterStocks = stocks || [];
+    activeSectorFilter = null;
+    _drawSectorBar();
+  }
+
+  function _drawSectorBar() {
     const el = document.getElementById('sector-bar');
-    if (!stocks || !stocks.length) { el.innerHTML = ''; return; }
+    if (!sectorFilterStocks.length) { el.innerHTML = ''; return; }
 
     const count = {};
-    stocks.forEach(s => {
+    sectorFilterStocks.forEach(s => {
       const key = (s.sector || s.stock_type || '기타').trim();
       count[key] = (count[key] || 0) + 1;
     });
 
     const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
     const pills = sorted.map(([name, n]) => {
-      const cls = n >= 4 ? 'sp-hi' : n === 3 ? 'sp-3' : n === 2 ? 'sp-2' : 'sp-1';
-      return `<span class="sp ${cls}">${name}<span class="sp-count">${n}</span></span>`;
+      const cls    = n >= 4 ? 'sp-hi' : n === 3 ? 'sp-3' : n === 2 ? 'sp-2' : 'sp-1';
+      const active = name === activeSectorFilter ? ' sp-active' : '';
+      return `<span class="sp ${cls}${active}" onclick="filterBySector('${name.replace(/'/g, "\\'")}')">${name}<span class="sp-count">${n}</span></span>`;
     }).join('');
+    const resetBtn = activeSectorFilter
+      ? `<span class="sp-reset" onclick="filterBySector(null)">✕ 전체</span>`
+      : '';
 
-    el.innerHTML = `<span class="sector-bar-label">섹터 분산</span>${pills}`;
+    el.innerHTML = `<span class="sector-bar-label">섹터 분산</span>${pills}${resetBtn}`;
+  }
+
+  function filterBySector(name) {
+    activeSectorFilter = (name === activeSectorFilter) ? null : name;
+    _drawSectorBar();
+    const stocks = activeSectorFilter
+      ? sectorFilterStocks.filter(s => (s.sector || s.stock_type || '기타').trim() === activeSectorFilter)
+      : sectorFilterStocks;
+    document.getElementById('short-section').innerHTML  = '';
+    document.getElementById('long-section').innerHTML   = '';
+    renderStocks(stocks, '단기',   'short-section', currentMarket);
+    renderStocks(stocks, '중장기', 'long-section',  currentMarket);
   }
 
   function downloadReport() {
