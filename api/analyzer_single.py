@@ -245,11 +245,15 @@ def analyze_single_stock(query: str) -> dict:
         ]
         data_section = "\n".join(l for l in data_lines if l)
         price_instruction = (
-            f"▶ current_price 는 반드시 '{price_str}' 을 그대로 사용하세요. "
-            f"target_price·stop_loss 는 현재가 {price_str} 기준으로 계산하세요. "
-            f"yfinance 재무지표가 있으면 그 값을 우선 사용하고, 없으면 학습 지식으로 추정하세요."
-            + (f" 다음 실적발표일은 반드시 '{next_earnings_rt}' 을 사용하세요." if next_earnings_rt else
-               " 다음 실적발표일은 학습 지식 기반 추정이므로 불확실하면 '확인 필요'로 표시하세요.")
+            f"▶ 아래 가격 규칙을 반드시 준수하세요 (학습 데이터의 과거 가격은 무시):\n"
+            f"1. current_price = '{price_str}' 그대로 사용 (절대 변경 금지)\n"
+            f"2. target_price  = 현재가 {price_str} 기준으로 +5%~+40% 범위 내에서 산정\n"
+            f"3. stop_loss     = 현재가 {price_str} 기준으로 -3%~-15% 범위 내에서 산정\n"
+            f"4. entry_price   = 현재가 {price_str} 기준으로 -5%~+3% 범위 내에서 산정\n"
+            f"5. upside_pct    = (target_price숫자 - {yf_data['price']}) / {yf_data['price']} * 100 으로 직접 계산\n"
+            f"6. yfinance 재무지표가 있으면 그 값을 우선 사용하고, 없으면 학습 지식으로 추정하세요."
+            + (f"\n7. 다음 실적발표일은 반드시 '{next_earnings_rt}' 을 사용하세요." if next_earnings_rt else
+               "\n7. 다음 실적발표일은 학습 지식 기반 추정이므로 불확실하면 '확인 필요'로 표시하세요.")
         )
         data_note = ""
     else:
@@ -339,6 +343,17 @@ def analyze_single_stock(query: str) -> dict:
         # 다음 실적발표일 — yfinance 실시간 값으로 강제 덮어쓰기
         if yf_data.get("next_earnings"):
             result["next_earnings"] = yf_data["next_earnings"]
+        # upside_pct 강제 재계산 — Gemini가 과거 기준가격으로 잘못 계산했을 경우 보정
+        try:
+            import re as _re
+            _nums = _re.findall(r"[\d,]+\.?\d*", str(result.get("target_price", "")))
+            if _nums:
+                _target = float(_nums[0].replace(",", ""))
+                if _target > 0:
+                    _up = (_target - yf_data["price"]) / yf_data["price"] * 100
+                    result["upside_pct"] = f"{_up:+.1f}%"
+        except Exception:
+            pass
     else:
         result["_realtime"] = False
 
