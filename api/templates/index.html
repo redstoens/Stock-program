@@ -1447,10 +1447,8 @@
       const n      = arr.length;
       const cls    = n >= 4 ? 'sp-hi' : n === 3 ? 'sp-3' : n === 2 ? 'sp-2' : 'sp-1';
       const active = name === activeSectorFilter ? ' sp-active' : '';
-      const sc     = scores[name];
-      const arrow  = sc >= 62 ? '<span class="sp-trend" style="color:#276749">▲</span>'
-                   : sc <= 38 ? '<span class="sp-trend" style="color:#9b2c2c">▼</span>'
-                   : '';
+      const sc    = scores[name];
+      const arrow = sc <= 38 ? '<span class="sp-trend" style="color:#9b2c2c">▼</span>' : '';
       return `<span class="sp ${cls}${active}" onclick="filterBySector('${name.replace(/'/g, "\\'")}')">${name}${arrow}<span class="sp-count">${n}</span></span>`;
     }).join('');
     const resetBtn = activeSectorFilter
@@ -1458,22 +1456,14 @@
       : '';
     el.innerHTML = `<span class="sector-bar-label">섹터 분산</span>${pills}${resetBtn}`;
 
-    // 트렌드 요약 바
-    const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-    const rising  = ranked.filter(([,v]) => v >= 62).map(([k]) => k);
+    // 트렌드 요약 바 (약세만 표시)
+    const ranked  = Object.entries(scores).sort((a, b) => b[1] - a[1]);
     const falling = ranked.filter(([,v]) => v <= 38).map(([k]) => k);
-    if (rising.length === 0 && falling.length === 0) {
+    if (falling.length === 0) {
       trendEl.innerHTML = '';
       return;
     }
-    const risingHtml  = rising.length
-      ? `<span class="stb-label">🔥 강세</span>${rising.map(k => `<span class="stb-rising" style="cursor:pointer" onclick="filterBySector('${k.replace(/'/g,"\\'")}')">▲ ${k}</span>`).join('<span class="stb-sep"> · </span>')}`
-      : '';
-    const sep = rising.length && falling.length ? '<span class="stb-sep" style="margin:0 0.3rem">|</span>' : '';
-    const fallingHtml = falling.length
-      ? `<span class="stb-label">📉 약세</span>${falling.map(k => `<span class="stb-falling" style="cursor:pointer" onclick="filterBySector('${k.replace(/'/g,"\\'")}')">▼ ${k}</span>`).join('<span class="stb-sep"> · </span>')}`
-      : '';
-    trendEl.innerHTML = risingHtml + sep + fallingHtml;
+    trendEl.innerHTML = `<span class="stb-label">📉 약세</span>${falling.map(k => `<span class="stb-falling" style="cursor:pointer" onclick="filterBySector('${k.replace(/'/g,"\\'")}')">▼ ${k}</span>`).join('<span class="stb-sep"> · </span>')}`;
   }
 
   function filterBySector(name) {
