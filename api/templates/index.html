@@ -264,6 +264,10 @@
     .sr-entry-label { font-size: 0.68rem; font-weight: 700; color: #276749; white-space: nowrap; padding-top: 0.1rem; }
     .sr-entry-value { font-size: 0.82rem; color: #2d3748; line-height: 1.5; }
     .sr-entry-price-big { font-size: 1.15rem; font-weight: 900; color: #22543d; }
+    .sr-entry-type-badge { font-size: 0.7rem; font-weight: 800; padding: 0.15rem 0.55rem; border-radius: 999px; margin-left: 0.5rem; vertical-align: middle; }
+    .sr-entry-type-mul { background: #ebf8ff; color: #2b6cb0; }
+    .sr-entry-type-bul { background: #fff5f5; color: #c53030; }
+    .sr-entry-type-note { font-size: 0.7rem; color: #718096; margin-top: 0.25rem; line-height: 1.4; }
     @media (max-width: 600px) {
       .sr-3cols { grid-template-columns: 1fr; }
       .sr-info-row { grid-template-columns: 1fr; }
@@ -1805,15 +1809,29 @@
             </div>
           </div>
 
-          ${(d.entry_price || d.entry_timing || d.entry_strategy) ? `
+          ${(d.entry_price || d.entry_timing || d.entry_strategy) ? (() => {
+            const isMul = (d.entry_strategy_type || '').includes('물타기');
+            const isBul = (d.entry_strategy_type || '').includes('불타기');
+            const typeBadge = isMul
+              ? `<span class="sr-entry-type-badge sr-entry-type-mul">📉 물타기</span>`
+              : isBul
+              ? `<span class="sr-entry-type-badge sr-entry-type-bul">📈 불타기</span>`
+              : '';
+            const typeNote = isMul
+              ? `<div class="sr-entry-type-note">💡 하락 시 추가매수 — 가격이 낮아질수록 더 매수해 평균단가를 낮추는 전략</div>`
+              : isBul
+              ? `<div class="sr-entry-type-note">💡 상승 확인 후 추가매수 — 가격이 오르며 추세가 확인될 때 비중을 늘리는 전략</div>`
+              : '';
+            return `
           <div class="sr-entry">
-            <div class="sr-entry-header">🎯 추천 진입가 & 매수 전략</div>
+            <div class="sr-entry-header">🎯 추천 진입가 & 매수 전략${typeBadge}</div>
             <div class="sr-entry-body">
-              ${d.entry_price ? `<span class="sr-entry-label">진입가</span><span class="sr-entry-value sr-entry-price-big">${d.entry_price}</span>` : ''}
-              ${d.entry_timing ? `<span class="sr-entry-label">타이밍</span><span class="sr-entry-value">${d.entry_timing}</span>` : ''}
-              ${d.entry_strategy ? `<span class="sr-entry-label">분할 전략</span><span class="sr-entry-value">${d.entry_strategy}</span>` : ''}
+              ${d.entry_price    ? `<span class="sr-entry-label">진입가</span><span class="sr-entry-value sr-entry-price-big">${d.entry_price}</span>` : ''}
+              ${d.entry_timing   ? `<span class="sr-entry-label">타이밍</span><span class="sr-entry-value">${d.entry_timing}</span>` : ''}
+              ${d.entry_strategy ? `<span class="sr-entry-label">분할 전략</span><div><span class="sr-entry-value">${d.entry_strategy}</span>${typeNote}</div>` : ''}
             </div>
-          </div>` : ''}
+          </div>`;
+          })() : ''}
 
           ${d.technical ? `<div class="sr-technical">📊 기술적 분석<br/>${d.technical}</div>` : ''}
           ${d.data_note ? `<div class="sr-data-note">⚠ ${d.data_note}</div>` : ''}
