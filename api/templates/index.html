@@ -1159,8 +1159,10 @@
       const metaText = `${marketLabel} · 분석일: ${data.date}`;
       cachedMeta[currentMarket] = metaText;
       document.getElementById('result-meta').textContent = metaText;
-      document.getElementById('result-section').style.display = 'block';
-      loadDateSelector(currentMarket);
+      if (currentMarket === 'kr' || currentMarket === 'us') {
+        document.getElementById('result-section').style.display = 'block';
+        loadDateSelector(currentMarket);
+      }
 
       const bar = document.getElementById('cached-bar');
       document.getElementById('cached-date-label').textContent =
@@ -1206,8 +1208,10 @@
       const metaText2 = `${marketLabel} · 생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
       cachedMeta[currentMarket] = metaText2;
       document.getElementById('result-meta').textContent = metaText2;
-      document.getElementById('result-section').style.display = 'block';
-      loadDateSelector(currentMarket);
+      if (currentMarket === 'kr' || currentMarket === 'us') {
+        document.getElementById('result-section').style.display = 'block';
+        loadDateSelector(currentMarket);
+      }
 
     } catch (err) {
       const box = document.getElementById('error-box');
