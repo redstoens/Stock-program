@@ -36,6 +36,15 @@
     #result-section { display: none; }
     .result-meta { font-size: 0.82rem; color: #a0aec0; margin-bottom: 0.75rem; }
 
+    /* 날짜별 조회 */
+    .date-sel-row { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .date-sel-lbl { font-size: 0.72rem; font-weight: 700; color: #a0aec0; white-space: nowrap; }
+    .date-btn-wrap { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+    .date-btn { padding: 0.26rem 0.65rem; border: 1.5px solid #e2e8f0; border-radius: 999px; background: white; font-size: 0.78rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; white-space: nowrap; }
+    .date-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
+    .date-btn.active { background: #2b6cb0; color: white; border-color: transparent; }
+    .hist-note { font-size: 0.75rem; color: #a0aec0; background: #fffbeb; border: 1px solid #fbd38d; border-radius: 8px; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
+
     /* 섹터 분산 */
     .sector-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 1.2rem; padding: 0.65rem 0.9rem; background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
     .sector-bar-label { font-size: 0.72rem; font-weight: 700; color: #a0aec0; margin-right: 0.15rem; white-space: nowrap; }
@@ -401,6 +410,7 @@
 
   <div id="result-section">
     <p class="result-meta" id="result-meta"></p>
+    <div id="date-selector-row"></div>
     <div id="sector-bar"></div>
     <div id="history-section"></div>
     <div id="short-section"></div>
@@ -431,6 +441,9 @@
   let currentVerifyFilter = 'all';
   let verifyDateFrom = '';
   let verifyDateTo   = '';
+  let allTrackRecs   = { kr: [], us: [] };
+  let selectedHistDate = null;
+  let cachedMeta       = { kr: '', us: '' };
   let favs     = new Set(JSON.parse(localStorage.getItem('stock-favs') || '[]'));
   let favData  = JSON.parse(localStorage.getItem('stock-fav-data') || '{}');
   let cachedStocks = { kr: [], us: [] };
@@ -453,9 +466,11 @@
     document.getElementById('result-section').style.display = 'none';
     document.getElementById('verify-section').style.display = isVerify ? 'block' : 'none';
     document.getElementById('fav-section').style.display    = isFav    ? 'block' : 'none';
-    document.getElementById('short-section').innerHTML   = '';
-    document.getElementById('long-section').innerHTML    = '';
-    document.getElementById('history-section').innerHTML = '';
+    document.getElementById('short-section').innerHTML    = '';
+    document.getElementById('long-section').innerHTML     = '';
+    document.getElementById('history-section').innerHTML  = '';
+    document.getElementById('date-selector-row').innerHTML = '';
+    selectedHistDate = null;
 
     if (isVerify) {
       currentVerifyMarket = 'kr';
@@ -746,9 +761,11 @@
       renderStocks(data.stocks, '중장기', 'long-section', currentMarket);
 
       const marketLabel = currentMarket === 'us' ? '🇺🇸 S&P 500' : '🇰🇷 KOSPI';
-      document.getElementById('result-meta').textContent =
-        `${marketLabel} · 분석일: ${data.date}`;
+      const metaText = `${marketLabel} · 분석일: ${data.date}`;
+      cachedMeta[currentMarket] = metaText;
+      document.getElementById('result-meta').textContent = metaText;
       document.getElementById('result-section').style.display = 'block';
+      loadDateSelector(currentMarket);
 
       const bar = document.getElementById('cached-bar');
       document.getElementById('cached-date-label').textContent =
@@ -791,9 +808,11 @@
 
       const marketLabel = currentMarket === 'us' ? '🇺🇸 S&P 500' : '🇰🇷 KOSPI';
       const now = new Date().toLocaleDateString('ko-KR');
-      document.getElementById('result-meta').textContent =
-        `${marketLabel} · 생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
+      const metaText2 = `${marketLabel} · 생성일: ${now}${memo ? ' · 메모: ' + memo : ''}`;
+      cachedMeta[currentMarket] = metaText2;
+      document.getElementById('result-meta').textContent = metaText2;
       document.getElementById('result-section').style.display = 'block';
+      loadDateSelector(currentMarket);
 
     } catch (err) {
       const box = document.getElementById('error-box');
@@ -1266,6 +1285,89 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') closeStockModal();
   });
+
+  // ── 날짜별 조회 ───────────────────────────────────────────────
+  async function loadDateSelector(market) {
+    const endpoint = market === 'us' ? '/api/verify-us' : '/api/verify-kr';
+    try {
+      const res  = await fetch(endpoint);
+      const data = await res.json();
+      allTrackRecs[market] = data.records || [];
+    } catch(e) {}
+    renderDateSelector(market);
+  }
+
+  function renderDateSelector(market) {
+    const el = document.getElementById('date-selector-row');
+    if (!el) return;
+    const records = allTrackRecs[market] || [];
+    const allDates = [...new Set(records.map(r => r.rec_date))].sort().reverse();
+    if (allDates.length < 2) { el.innerHTML = ''; return; }
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const show = allDates.slice(0, 14);
+    const activeDt = selectedHistDate || todayStr;
+
+    const btns = show.map(d => {
+      const isToday = d === todayStr;
+      const label   = isToday ? '오늘' : d.slice(5).replace('-', '/');
+      const active  = d === activeDt ? ' active' : '';
+      return `<button class="date-btn${active}" data-date="${d}" onclick="selectHistDate('${d}')">${label}</button>`;
+    }).join('');
+
+    el.innerHTML = `
+      <span class="date-sel-lbl">📅 날짜별 조회</span>
+      <div class="date-btn-wrap">${btns}</div>`;
+  }
+
+  function selectHistDate(dateStr) {
+    selectedHistDate = dateStr;
+    renderDateSelector(currentMarket);
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const isToday  = dateStr === todayStr;
+    const mLabel   = currentMarket === 'us' ? '🇺🇸 S&P 500' : '🇰🇷 KOSPI';
+
+    if (isToday) {
+      // 오늘: 캐시된 데이터로 복원
+      document.getElementById('result-meta').textContent = cachedMeta[currentMarket] || `${mLabel} · 오늘`;
+      document.getElementById('history-section').innerHTML = '';
+      renderSectorBar(cachedStocks[currentMarket]);
+      document.getElementById('short-section').innerHTML = '';
+      document.getElementById('long-section').innerHTML  = '';
+      renderStocks(cachedStocks[currentMarket], '단기',   'short-section', currentMarket);
+      renderStocks(cachedStocks[currentMarket], '중장기', 'long-section',  currentMarket);
+      return;
+    }
+
+    // 과거 날짜: 스냅샷 또는 간소 카드
+    const recs   = (allTrackRecs[currentMarket] || []).filter(r => r.rec_date === dateStr);
+    const stocks = recs.map(r => r.snapshot || {
+      name: r.name, code: r.code,
+      investment_horizon: r.investment_horizon || '중장기',
+      future_target: r.target_str,
+      stop_loss:     r.stop_loss_str,
+      current_price_raw: r.entry_price,
+      _no_snap: true,
+    }).filter(s => s.name);
+
+    document.getElementById('result-meta').textContent =
+      `${mLabel} · ${dateStr} 추천 기록 (${stocks.length}종목)`;
+    document.getElementById('history-section').innerHTML = '';
+
+    // 스냅샷 없는 구 기록 안내
+    const hasOld = stocks.some(s => s._no_snap);
+    const sectorEl = document.getElementById('sector-bar');
+    sectorEl.innerHTML = hasOld
+      ? '<div class="hist-note">⚠️ 이 날짜는 분석 스냅샷이 없어 간략 정보만 표시됩니다. (2026-06-09 이후 기록부터 전체 카드 표시)</div>'
+      : '';
+    if (!hasOld) renderSectorBar(stocks);
+
+    document.getElementById('short-section').innerHTML = '';
+    document.getElementById('long-section').innerHTML  = '';
+    renderStocks(stocks, '단기',   'short-section', currentMarket);
+    renderStocks(stocks, '중장기', 'long-section',  currentMarket);
+  }
 
   // ── 섹터 분산 바 ──────────────────────────────────────────────
   function renderSectorBar(stocks) {
