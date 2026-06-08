@@ -567,15 +567,41 @@
       const res = await fetch(endpoint);
       const data = await res.json();
       verifyRecords = (data.records || []).slice().reverse(); // 최신순
-      const benchLabel = currentVerifyMarket === 'us' ? 'S&P 500' : 'KOSPI';
-      renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
+
       currentVerifyFilter = 'all';
       verifyDateFrom = ''; verifyDateTo = '';
       document.querySelectorAll('.vf-btn').forEach(b => b.classList.remove('active'));
       document.getElementById('vf-all').classList.add('active');
       document.querySelectorAll('.vdf-btn').forEach(b => b.classList.remove('active'));
       document.getElementById('vdf-all').classList.add('active');
+
+      const benchLabel = currentVerifyMarket === 'us' ? 'S&P 500' : 'KOSPI';
+      renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
       renderVerify();
+
+      // 진행중 종목 현재가 비동기 fetch
+      const activeCodes = verifyRecords.filter(r => r.status === '진행중').map(r => r.code);
+      if (activeCodes.length > 0) {
+        try {
+          const pr   = await fetch('/api/current-prices', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({codes: activeCodes, market: currentVerifyMarket})
+          });
+          const pd   = await pr.json();
+          const prices = pd.prices || {};
+          verifyRecords.forEach(r => {
+            if (r.status === '진행중' && prices[r.code]) {
+              r.current_price      = prices[r.code];
+              r.current_return_pct = r.entry_price
+                ? (prices[r.code] - r.entry_price) / r.entry_price * 100
+                : 0;
+            }
+          });
+          renderVerify(); // 현재가 채운 뒤 재렌더
+          renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
+        } catch(e) {}
+      }
     } catch(e) {
       document.getElementById('verify-tbody').innerHTML =
         '<tr><td colspan="9" class="verify-empty">데이터를 불러올 수 없습니다.</td></tr>';
@@ -755,15 +781,23 @@
       <div class="vs-card success"><span class="vs-num">${success}</span><div class="vs-lbl">목표달성</div></div>
       <div class="vs-card loss">   <span class="vs-num">${loss}</span>   <div class="vs-lbl">손절</div></div>`;
 
-    // 평균 수익률 (종결된 종목)
-    const closed = verifyRecords.filter(r => r.exit_return_pct != null);
-    const avgBar = document.getElementById('verify-avg-bar');
-    if (closed.length > 0) {
-      const avg = (closed.reduce((s, r) => s + r.exit_return_pct, 0) / closed.length).toFixed(2);
-      const winRate = Math.round(closed.filter(r => r.exit_return_pct > 0).length / closed.length * 100);
-      const sign = avg >= 0 ? '+' : '';
+    // 진행중 종목 성과 요약
+    const avgBar   = document.getElementById('verify-avg-bar');
+    const liveRecs = verifyRecords.filter(r => r.status === '진행중' && r.current_return_pct != null);
+    if (liveRecs.length > 0) {
+      const avgRet  = liveRecs.reduce((s, r) => s + r.current_return_pct, 0) / liveRecs.length;
+      const winRate = Math.round(liveRecs.filter(r => r.current_return_pct > 0).length / liveRecs.length * 100);
+      const best    = liveRecs.reduce((a, b) => a.current_return_pct > b.current_return_pct ? a : b);
+      const worst   = liveRecs.reduce((a, b) => a.current_return_pct < b.current_return_pct ? a : b);
+      const sign    = avgRet >= 0 ? '+' : '';
+      const avgCls  = avgRet >= 0 ? 'pos' : 'neg';
       avgBar.style.display = 'flex';
-      avgBar.innerHTML = `평균 수익률 <span>${sign}${avg}%</span> &nbsp;·&nbsp; 승률 <span>${winRate}%</span> &nbsp;·&nbsp; 종결 ${closed.length}개`;
+      avgBar.innerHTML = `
+        📊 진행중 ${liveRecs.length}종목 평균
+        <span class="${avgCls}">${sign}${avgRet.toFixed(2)}%</span>
+        &nbsp;·&nbsp; 승률 <span>${winRate}%</span>
+        &nbsp;·&nbsp; 🏆 <span class="pos">${best.name} ${best.current_return_pct >= 0 ? '+' : ''}${best.current_return_pct.toFixed(1)}%</span>
+        &nbsp;·&nbsp; 📉 <span class="neg">${worst.name} ${worst.current_return_pct.toFixed(1)}%</span>`;
     } else {
       avgBar.style.display = 'none';
     }
@@ -775,9 +809,13 @@
       return;
     }
     tbody.innerHTML = records.map(r => {
+      const hasRet = r.current_return_pct != null;
       const retPct = r.current_return_pct ?? 0;
       const sign   = retPct >= 0 ? '+' : '';
       const retCls = retPct > 0 ? 'pos' : retPct < 0 ? 'neg' : 'neu';
+      const retStr = r.status !== '진행중' ? '-'
+                   : !hasRet ? '<span style="color:#a0aec0;font-size:0.8em">로딩중…</span>'
+                   : `${sign}${retPct.toFixed(2)}%`;
       const isUS = currentVerifyMarket === 'us';
       const fmtPrice = (p) => !p ? '-' : isUS
         ? '$' + Number(p).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
@@ -795,7 +833,7 @@
         <td style="color:#276749">${tgt}</td>
         <td style="color:#c53030">${sl}</td>
         <td>${curPrice}</td>
-        <td class="vt-ret ${retCls}">${sign}${retPct.toFixed(2)}%</td>
+        <td class="vt-ret ${retCls}">${retStr}</td>
         <td><span class="status-badge status-${r.status}">${r.status}</span></td>
       </tr>`;
     }).join('');

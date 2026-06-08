@@ -106,6 +106,37 @@ def analyze():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/current-prices", methods=["POST"])
+def current_prices():
+    data   = request.get_json(force=True)
+    codes  = data.get("codes", [])
+    market = data.get("market", "kr")
+
+    def _fetch(code):
+        try:
+            if market == "us":
+                price = yf.Ticker(code).fast_info.last_price or 0
+            else:
+                price = 0
+                for suffix in (".KS", ".KQ"):
+                    try:
+                        p = yf.Ticker(f"{code}{suffix}").fast_info.last_price or 0
+                        if p:
+                            price = p
+                            break
+                    except Exception:
+                        continue
+            return code, round(float(price), 2) if price else 0
+        except Exception:
+            return code, 0
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = [ex.submit(_fetch, c) for c in codes[:30]]
+        results = dict(f.result() for f in futures)
+
+    return jsonify({"prices": results})
+
+
 @app.route("/api/news")
 def news():
     try:
