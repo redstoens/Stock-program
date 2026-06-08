@@ -188,7 +188,7 @@
     .news-loading { text-align: center; padding: 3rem 1rem; color: #718096; font-size: 0.9rem; }
 
     /* 종목 분석 탭 */
-    .ss-wrap { max-width: 700px; margin: 0 auto; padding: 1rem 0; }
+    .ss-wrap { max-width: 760px; margin: 0 auto; padding: 1rem 0; }
     .ss-search-box { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
     .ss-input { flex: 1; padding: 0.75rem 1rem; border-radius: 10px; border: 1.5px solid #e2e8f0; font-size: 0.95rem; outline: none; transition: border-color 0.15s; }
     .ss-input:focus { border-color: #4299e1; }
@@ -197,45 +197,69 @@
     .ss-btn:disabled { background: #a0aec0; cursor: not-allowed; }
     .ss-loading { text-align: center; padding: 3rem 1rem; color: #718096; font-size: 0.9rem; }
     /* 결과 카드 */
-    .sr-card { background: white; border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); overflow: hidden; }
+    .sr-card { background: white; border-radius: 14px; box-shadow: 0 2px 16px rgba(0,0,0,0.1); overflow: hidden; }
     .sr-card-header { padding: 1.1rem 1.3rem 0.9rem; border-bottom: 1px solid #f0f4f8; display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
     .sr-name-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
-    .sr-name { font-size: 1.25rem; font-weight: 900; color: #1a202c; }
-    .sr-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .sr-name { font-size: 1.3rem; font-weight: 900; color: #1a202c; }
+    .sr-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.2rem; }
     .sr-badge { font-size: 0.7rem; font-weight: 700; padding: 0.18rem 0.55rem; border-radius: 999px; }
     .sr-badge-kr { background: #ebf8ff; color: #2b6cb0; }
     .sr-badge-us { background: #faf5ff; color: #6b46c1; }
     .sr-badge-sector { background: #f0fff4; color: #276749; }
-    .sr-action-wrap { text-align: right; }
-    .sr-action { font-size: 1rem; font-weight: 900; padding: 0.45rem 1rem; border-radius: 10px; }
+    .sr-action-wrap { text-align: right; flex-shrink: 0; }
+    .sr-action { font-size: 1.05rem; font-weight: 900; padding: 0.5rem 1.2rem; border-radius: 10px; display: inline-block; }
     .sr-action.buy  { background: #c6f6d5; color: #22543d; }
     .sr-action.hold { background: #fefcbf; color: #744210; }
     .sr-action.sell { background: #fed7d7; color: #822727; }
-    .sr-action-reason { font-size: 0.72rem; color: #718096; margin-top: 0.3rem; }
-    .sr-price-row { padding: 0.85rem 1.3rem; background: #f7fafc; display: flex; gap: 2rem; flex-wrap: wrap; border-bottom: 1px solid #edf2f7; }
-    .sr-price-item { display: flex; flex-direction: column; gap: 0.12rem; }
-    .sr-price-label { font-size: 0.68rem; color: #a0aec0; font-weight: 600; text-transform: uppercase; }
+    .sr-action-reason { font-size: 0.72rem; color: #718096; margin-top: 0.35rem; }
+    /* 가격 행 */
+    .sr-price-row { padding: 0.85rem 1.3rem; background: #f7fafc; display: flex; gap: 1.5rem; flex-wrap: wrap; border-bottom: 1px solid #edf2f7; }
+    .sr-price-item { display: flex; flex-direction: column; gap: 0.1rem; }
+    .sr-price-label { font-size: 0.65rem; color: #a0aec0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
     .sr-price-value { font-size: 1rem; font-weight: 800; color: #2d3748; }
     .sr-price-value.up   { color: #e53e3e; }
     .sr-price-value.down { color: #3182ce; }
-    .sr-body { padding: 1rem 1.3rem; }
-    .sr-summary { font-size: 0.85rem; color: #4a5568; line-height: 1.65; margin-bottom: 1rem; padding: 0.75rem 0.9rem; background: #f7fafc; border-radius: 8px; border-left: 3px solid #4299e1; }
-    .sr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.9rem; }
-    .sr-stat { background: #f7fafc; border-radius: 8px; padding: 0.65rem 0.8rem; }
-    .sr-stat-label { font-size: 0.68rem; color: #a0aec0; font-weight: 700; margin-bottom: 0.2rem; }
-    .sr-stat-value { font-size: 0.9rem; font-weight: 800; color: #2d3748; }
-    .sr-stat-value.green { color: #276749; }
-    .sr-stat-value.red   { color: #9b2c2c; }
-    .sr-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 0.9rem; }
+    .sr-price-value.green { color: #276749; }
+    .sr-price-value.red   { color: #9b2c2c; }
+    /* 재무지표 행 */
+    .sr-fund-row { padding: 0.7rem 1.3rem; background: #fffff0; display: flex; gap: 1.5rem; flex-wrap: wrap; border-bottom: 1px solid #edf2f7; }
+    .sr-fund-item { display: flex; flex-direction: column; gap: 0.1rem; }
+    .sr-fund-label { font-size: 0.63rem; color: #975a16; font-weight: 700; text-transform: uppercase; }
+    .sr-fund-value { font-size: 0.88rem; font-weight: 800; color: #744210; }
+    /* 본문 */
+    .sr-body { padding: 1rem 1.3rem; display: flex; flex-direction: column; gap: 0.85rem; }
+    .sr-summary { font-size: 0.85rem; color: #4a5568; line-height: 1.7; padding: 0.8rem 0.95rem; background: #f7fafc; border-radius: 8px; border-left: 3px solid #4299e1; }
+    /* 3열 분석 그리드 */
+    .sr-3cols { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.7rem; }
     .sr-list-box { background: #f7fafc; border-radius: 8px; padding: 0.7rem 0.85rem; }
-    .sr-list-title { font-size: 0.72rem; font-weight: 800; margin-bottom: 0.45rem; }
+    .sr-list-title { font-size: 0.72rem; font-weight: 800; margin-bottom: 0.5rem; }
     .sr-list-title.strength { color: #276749; }
     .sr-list-title.risk     { color: #9b2c2c; }
-    .sr-list li { font-size: 0.78rem; color: #4a5568; margin-bottom: 0.3rem; line-height: 1.4; list-style: none; padding-left: 0; }
-    .sr-technical { font-size: 0.8rem; color: #4a5568; padding: 0.6rem 0.85rem; background: #fffaf0; border-radius: 8px; border-left: 3px solid #ed8936; }
+    .sr-list-title.catalyst { color: #2b6cb0; }
+    .sr-list { list-style: none; padding: 0; margin: 0; }
+    .sr-list li { font-size: 0.78rem; color: #4a5568; margin-bottom: 0.32rem; line-height: 1.4; }
+    /* 시나리오 */
+    .sr-scenarios { display: flex; flex-direction: column; gap: 0.45rem; }
+    .sr-scenario { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.6rem 0.85rem; border-radius: 8px; font-size: 0.8rem; line-height: 1.45; }
+    .sr-scenario.bull { background: #f0fff4; border-left: 3px solid #48bb78; }
+    .sr-scenario.base { background: #f7fafc; border-left: 3px solid #a0aec0; }
+    .sr-scenario.bear { background: #fff5f5; border-left: 3px solid #fc8181; }
+    .sr-scenario-icon { font-size: 1rem; flex-shrink: 0; margin-top: 0.05rem; }
+    .sr-scenario-label { font-size: 0.68rem; font-weight: 800; margin-bottom: 0.18rem; }
+    .sr-scenario.bull .sr-scenario-label { color: #276749; }
+    .sr-scenario.base .sr-scenario-label { color: #4a5568; }
+    .sr-scenario.bear .sr-scenario-label { color: #9b2c2c; }
+    /* 수급·실적 행 */
+    .sr-info-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+    .sr-info-box { background: #f7fafc; border-radius: 8px; padding: 0.6rem 0.8rem; }
+    .sr-info-label { font-size: 0.65rem; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .sr-info-value { font-size: 0.8rem; color: #4a5568; line-height: 1.4; }
+    /* 기술적 분석 */
+    .sr-technical { font-size: 0.8rem; color: #4a5568; padding: 0.65rem 0.9rem; background: #fffaf0; border-radius: 8px; border-left: 3px solid #ed8936; line-height: 1.55; }
+    .sr-data-note { font-size: 0.7rem; color: #a0aec0; text-align: right; }
     @media (max-width: 600px) {
-      .sr-grid { grid-template-columns: 1fr 1fr; }
-      .sr-lists { grid-template-columns: 1fr; }
+      .sr-3cols { grid-template-columns: 1fr; }
+      .sr-info-row { grid-template-columns: 1fr; }
     }
 
     /* 매도·매수 신호 배지 */
@@ -1672,79 +1696,110 @@
       '관망': {cls: 'hold', icon: '◆ 관망'},
       '매도': {cls: 'sell', icon: '▼ 매도'},
     };
-    const action    = ACTION_MAP[d.action] || ACTION_MAP['관망'];
-    const mktBadge  = d.market === 'KR'
+    const action   = ACTION_MAP[d.action] || ACTION_MAP['관망'];
+    const mktBadge = d.market === 'KR'
       ? `<span class="sr-badge sr-badge-kr">🇰🇷 KR</span>`
       : `<span class="sr-badge sr-badge-us">🇺🇸 US</span>`;
-    const codeStr   = d.code ? `<span class="sr-badge sr-badge-sector">${d.code}</span>` : '';
-    const sectStr   = d.sector ? `<span class="sr-badge sr-badge-sector">${d.sector}</span>` : '';
+    const codeStr  = d.code   ? `<span class="sr-badge sr-badge-sector">${d.code}</span>` : '';
+    const sectStr  = d.sector ? `<span class="sr-badge sr-badge-sector">${d.sector}</span>` : '';
 
-    const chgPct    = d.change_pct || '';
-    const chgCls    = chgPct.startsWith('+') ? 'up' : chgPct.startsWith('-') ? 'down' : '';
+    const chgPct   = d.change_pct || '';
+    const chgCls   = chgPct.startsWith('+') ? 'up' : chgPct.startsWith('-') ? 'down' : '';
+    const upCls    = (d.upside_pct || '').startsWith('+') ? 'green' : 'red';
 
-    const strengthItems = (d.strength || []).map(s => `<li>✓ ${s}</li>`).join('');
-    const riskItems     = (d.risk || []).map(r => `<li>⚠ ${r}</li>`).join('');
+    // 재무지표 행 (있는 것만 표시)
+    const fundFields = [
+      ['PER',    d.per],
+      ['PBR',    d.pbr],
+      ['ROE',    d.roe],
+      ['영업이익률', d.operating_margin],
+      ['배당수익률', d.dividend_yield],
+    ].filter(([,v]) => v && v !== 'N/A');
+    const fundRow = fundFields.length ? `
+      <div class="sr-fund-row">
+        ${fundFields.map(([l, v]) => `
+          <div class="sr-fund-item">
+            <span class="sr-fund-label">${l}</span>
+            <span class="sr-fund-value">${v}</span>
+          </div>`).join('')}
+      </div>` : '';
 
-    const upsideCls = (d.upside_pct || '').startsWith('+') ? 'green' : 'red';
+    // 강점 / 리스크 / 촉매
+    const strengthItems  = (d.strength  || []).map(s => `<li>✓ ${s}</li>`).join('');
+    const riskItems      = (d.risk      || []).map(r => `<li>⚠ ${r}</li>`).join('');
+    const catalystItems  = (d.catalysts || []).map(c => `<li>→ ${c}</li>`).join('');
+
+    // 투자 시나리오
+    const scenarios = (d.scenario_bull || d.scenario_base || d.scenario_bear) ? `
+      <div class="sr-scenarios">
+        ${d.scenario_bull ? `<div class="sr-scenario bull"><span class="sr-scenario-icon">🟢</span><div><div class="sr-scenario-label">낙관</div>${d.scenario_bull}</div></div>` : ''}
+        ${d.scenario_base ? `<div class="sr-scenario base"><span class="sr-scenario-icon">⚪</span><div><div class="sr-scenario-label">중립</div>${d.scenario_base}</div></div>` : ''}
+        ${d.scenario_bear ? `<div class="sr-scenario bear"><span class="sr-scenario-icon">🔴</span><div><div class="sr-scenario-label">비관</div>${d.scenario_bear}</div></div>` : ''}
+      </div>` : '';
 
     container.innerHTML = `
       <div class="sr-card">
         <div class="sr-card-header">
           <div class="sr-name-wrap">
             <span class="sr-name">${d.name || d.code || '—'}</span>
-            <div class="sr-meta">${mktBadge}${codeStr}${sectStr}</div>
+            <div class="sr-meta">${mktBadge}${codeStr}${sectStr}
+              <span class="sr-badge" style="background:#fffaf0;color:#975a16">${d.investment_horizon || '—'} 추천</span>
+            </div>
           </div>
           <div class="sr-action-wrap">
             <div class="sr-action ${action.cls}">${action.icon}</div>
             <div class="sr-action-reason">${d.action_reason || ''}</div>
           </div>
         </div>
+
         <div class="sr-price-row">
-          <div class="sr-price-item">
-            <span class="sr-price-label">현재가</span>
-            <span class="sr-price-value">${d.current_price || '—'}</span>
-          </div>
-          <div class="sr-price-item">
-            <span class="sr-price-label">전일비</span>
-            <span class="sr-price-value ${chgCls}">${chgPct || '—'}</span>
-          </div>
-          <div class="sr-price-item">
-            <span class="sr-price-label">목표주가</span>
-            <span class="sr-price-value green">${d.target_price || '—'}</span>
-          </div>
-          <div class="sr-price-item">
-            <span class="sr-price-label">상승여력</span>
-            <span class="sr-price-value ${upsideCls}">${d.upside_pct || '—'}</span>
-          </div>
-          <div class="sr-price-item">
-            <span class="sr-price-label">손절가</span>
-            <span class="sr-price-value red">${d.stop_loss || '—'}</span>
-          </div>
+          <div class="sr-price-item"><span class="sr-price-label">현재가</span><span class="sr-price-value">${d.current_price || '—'}</span></div>
+          <div class="sr-price-item"><span class="sr-price-label">전일비</span><span class="sr-price-value ${chgCls}">${chgPct || '—'}</span></div>
+          <div class="sr-price-item"><span class="sr-price-label">목표주가</span><span class="sr-price-value green">${d.target_price || '—'}</span></div>
+          <div class="sr-price-item"><span class="sr-price-label">상승여력</span><span class="sr-price-value ${upCls}">${d.upside_pct || '—'}</span></div>
+          <div class="sr-price-item"><span class="sr-price-label">손절가</span><span class="sr-price-value red">${d.stop_loss || '—'}</span></div>
+          <div class="sr-price-item"><span class="sr-price-label">기업가치</span><span class="sr-price-value" style="font-size:0.8rem">${d.valuation || '—'}</span></div>
         </div>
+
+        ${fundRow}
+
         <div class="sr-body">
           ${d.summary ? `<div class="sr-summary">${d.summary}</div>` : ''}
-          <div class="sr-grid">
-            <div class="sr-stat">
-              <div class="sr-stat-label">기업가치</div>
-              <div class="sr-stat-value">${d.valuation || '—'}</div>
-            </div>
-            <div class="sr-stat">
-              <div class="sr-stat-label">추천 투자기간</div>
-              <div class="sr-stat-value">${d.investment_horizon || '—'}</div>
-            </div>
-          </div>
-          <div class="sr-lists">
+
+          <div class="sr-3cols">
             <div class="sr-list-box">
-              <div class="sr-list-title strength">강점</div>
+              <div class="sr-list-title strength">✅ 강점</div>
               <ul class="sr-list">${strengthItems || '<li>정보 없음</li>'}</ul>
             </div>
             <div class="sr-list-box">
-              <div class="sr-list-title risk">리스크</div>
+              <div class="sr-list-title risk">⚠ 리스크</div>
               <ul class="sr-list">${riskItems || '<li>정보 없음</li>'}</ul>
             </div>
+            <div class="sr-list-box">
+              <div class="sr-list-title catalyst">🚀 단기 촉매</div>
+              <ul class="sr-list">${catalystItems || '<li>정보 없음</li>'}</ul>
+            </div>
           </div>
-          ${d.technical ? `<div class="sr-technical">📊 ${d.technical}</div>` : ''}
-          ${d.data_note ? `<div style="margin-top:0.6rem;font-size:0.7rem;color:#a0aec0;text-align:right">⚠ ${d.data_note}</div>` : ''}
+
+          ${scenarios}
+
+          <div class="sr-info-row">
+            <div class="sr-info-box">
+              <div class="sr-info-label">수급 동향</div>
+              <div class="sr-info-value">${d.supply_demand || '—'}</div>
+            </div>
+            <div class="sr-info-box">
+              <div class="sr-info-label">실적 트렌드</div>
+              <div class="sr-info-value">${d.earnings_trend || '—'}</div>
+            </div>
+            <div class="sr-info-box">
+              <div class="sr-info-label">다음 실적발표</div>
+              <div class="sr-info-value">${d.next_earnings || '—'}</div>
+            </div>
+          </div>
+
+          ${d.technical ? `<div class="sr-technical">📊 기술적 분석<br/>${d.technical}</div>` : ''}
+          ${d.data_note ? `<div class="sr-data-note">⚠ ${d.data_note}</div>` : ''}
         </div>
       </div>`;
   }
