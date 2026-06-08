@@ -517,7 +517,22 @@
     .vmt-btn { flex: 1; padding: 0.6rem; border: 1.5px solid #e2e8f0; border-radius: 8px; background: white; font-size: 0.88rem; font-weight: 600; cursor: pointer; color: #718096; transition: all 0.15s; }
     .vmt-btn:hover { border-color: #bee3f8; color: #2b6cb0; }
     .vmt-btn.active { background: linear-gradient(135deg, #2b6cb0, #1a365d); color: white; border-color: transparent; }
+
+    /* ── 주가 차트 ── */
+    .sr-chart-wrap { margin-top: 1.4rem; background: #fff; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 1rem 1.2rem 0.8rem; }
+    .sr-chart-title { font-size: 0.82rem; font-weight: 700; color: #4a5568; margin-bottom: 0.7rem; display: flex; align-items: center; gap: 0.4rem; }
+    .sr-chart-legend { display: flex; gap: 1rem; font-size: 0.74rem; color: #718096; }
+    .sr-chart-legend span { display: flex; align-items: center; gap: 0.3rem; }
+    .sr-chart-legend span::before { content:''; display:inline-block; width:22px; height:3px; border-radius:2px; }
+    .sr-chart-legend .leg-price::before { background:#3b82f6; }
+    .sr-chart-legend .leg-ma20::before  { background:#f59e0b; }
+    .sr-chart-legend .leg-ma60::before  { background:#10b981; }
+    .sr-chart-legend .leg-rsi::before   { background:#8b5cf6; }
+    .sr-chart-price-box { height: 200px; margin-bottom: 0.3rem; }
+    .sr-chart-rsi-box   { height: 90px; }
+    .sr-chart-loading { text-align: center; padding: 2rem; color: #a0aec0; font-size: 0.85rem; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1839,8 +1854,128 @@
 
           ${d.technical ? `<div class="sr-technical">📊 기술적 분석<br/>${d.technical}</div>` : ''}
           ${d.data_note ? `<div class="sr-data-note">⚠ ${d.data_note}</div>` : ''}
+
+          <div class="sr-chart-wrap" id="sr-chart-wrap">
+            <div class="sr-chart-title">
+              📈 주가 차트 (6개월)
+              <div class="sr-chart-legend">
+                <span class="leg-price">종가</span>
+                <span class="leg-ma20">MA20</span>
+                <span class="leg-ma60">MA60</span>
+                <span class="leg-rsi">RSI</span>
+              </div>
+            </div>
+            <div id="sr-chart-loading" class="sr-chart-loading">차트 로딩 중...</div>
+            <div id="sr-chart-canvases" style="display:none">
+              <div class="sr-chart-price-box"><canvas id="sr-chart-price"></canvas></div>
+              <div class="sr-chart-rsi-box"><canvas id="sr-chart-rsi"></canvas></div>
+            </div>
+          </div>
         </div>
       </div>`;
+
+    // 차트 비동기 로드
+    if (d.yf_data && d.yf_data.symbol) {
+      loadStockChart(d.yf_data.symbol);
+    }
+  }
+
+  let _chartPrice = null, _chartRsi = null;
+
+  async function loadStockChart(symbol) {
+    try {
+      const r    = await fetch('/api/stock-chart', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({symbol})
+      });
+      const data = await r.json();
+      if (!data.success) throw new Error(data.error);
+      renderStockChart(data);
+    } catch(e) {
+      const el = document.getElementById('sr-chart-loading');
+      if (el) el.textContent = '차트 데이터를 불러올 수 없습니다.';
+    }
+  }
+
+  function renderStockChart(data) {
+    const loadEl = document.getElementById('sr-chart-loading');
+    const cvWrap = document.getElementById('sr-chart-canvases');
+    if (!loadEl || !cvWrap) return;
+
+    if (_chartPrice) { _chartPrice.destroy(); _chartPrice = null; }
+    if (_chartRsi)   { _chartRsi.destroy();   _chartRsi   = null; }
+
+    loadEl.style.display = 'none';
+    cvWrap.style.display = 'block';
+
+    const labels = data.dates;
+    const commonOpts = {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+      scales: { x: { ticks: { maxTicksLimit: 6, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } } }
+    };
+
+    _chartPrice = new Chart(document.getElementById('sr-chart-price'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: '종가', data: data.closes, borderColor: '#3b82f6', borderWidth: 2, pointRadius: 0, tension: 0.1, fill: false },
+          { label: 'MA20', data: data.ma20,   borderColor: '#f59e0b', borderWidth: 1.5, pointRadius: 0, tension: 0.1, fill: false, borderDash: [] },
+          { label: 'MA60', data: data.ma60,   borderColor: '#10b981', borderWidth: 1.5, pointRadius: 0, tension: 0.1, fill: false, borderDash: [4,3] },
+        ]
+      },
+      options: { ...commonOpts, scales: { ...commonOpts.scales, y: { ticks: { font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } } } }
+    });
+
+    const rsiColors = data.rsi.map(v => v === null ? 'transparent' : v >= 70 ? '#f87171' : v <= 30 ? '#34d399' : '#8b5cf6');
+    _chartRsi = new Chart(document.getElementById('sr-chart-rsi'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          { label: 'RSI', data: data.rsi, borderColor: '#8b5cf6', borderWidth: 1.5, pointRadius: 0, tension: 0.1, fill: false },
+        ]
+      },
+      options: {
+        ...commonOpts,
+        scales: {
+          ...commonOpts.scales,
+          y: { min: 0, max: 100, ticks: { stepSize: 30, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+        },
+        plugins: {
+          ...commonOpts.plugins,
+          annotation: undefined,
+        }
+      }
+    });
+
+    // RSI 30/70 기준선 (canvas 직접 그리기)
+    setTimeout(() => {
+      const canvas = document.getElementById('sr-chart-rsi');
+      if (!canvas || !_chartRsi) return;
+      const ctx   = canvas.getContext('2d');
+      const chart = _chartRsi;
+      const yAxis = chart.scales.y;
+      const xStart = chart.chartArea.left;
+      const xEnd   = chart.chartArea.right;
+      [[30, '#34d399'], [70, '#f87171']].forEach(([val, color]) => {
+        const y = yAxis.getPixelForValue(val);
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = 1;
+        ctx.setLineDash([4, 3]);
+        ctx.globalAlpha = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(xStart, y);
+        ctx.lineTo(xEnd, y);
+        ctx.stroke();
+        ctx.restore();
+      });
+    }, 100);
   }
 
   function _relTime(pubStr) {

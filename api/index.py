@@ -208,6 +208,43 @@ def stock_search():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/stock-chart", methods=["POST"])
+def stock_chart():
+    data   = request.get_json(force=True)
+    symbol = (data.get("symbol") or "").strip()
+    if not symbol:
+        return jsonify({"success": False, "error": "symbol이 없습니다"}), 400
+    try:
+        import pandas as pd
+        ticker = yf.Ticker(symbol)
+        hist   = ticker.history(period="6mo")
+        if hist.empty:
+            return jsonify({"success": False, "error": "차트 데이터 없음"}), 404
+
+        closes  = hist["Close"]
+        dates   = [str(d.date()) for d in hist.index]
+
+        def _ma(n):
+            ma = closes.rolling(n).mean()
+            return [round(float(v), 2) if not pd.isna(v) else None for v in ma]
+
+        delta = closes.diff()
+        gain  = delta.clip(lower=0).rolling(14).mean()
+        loss  = (-delta.clip(upper=0)).rolling(14).mean()
+        rsi_s = 100 - (100 / (1 + gain / loss))
+
+        return jsonify({
+            "success": True,
+            "dates":   dates,
+            "closes":  [round(float(v), 2) for v in closes],
+            "ma20":    _ma(20),
+            "ma60":    _ma(60),
+            "rsi":     [round(float(v), 1) if not pd.isna(v) else None for v in rsi_s],
+        })
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @app.route("/api/news")
 def news():
     try:
