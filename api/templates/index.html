@@ -115,6 +115,26 @@
     .fav-empty { text-align: center; color: #a0aec0; padding: 3rem 1rem; font-size: 0.95rem; line-height: 2; }
     #fav-count { font-size: 0.8em; opacity: 0.85; }
 
+    /* 뉴스 탭 */
+    #news-section { padding-top: 0.5rem; }
+    .news-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    .news-toolbar-title { font-size: 0.82rem; font-weight: 700; color: #4a5568; }
+    .news-toolbar-sub { font-size: 0.74rem; color: #a0aec0; margin-top: 0.1rem; }
+    .btn-news-refresh { padding: 0.3rem 0.8rem; border: 1.5px solid #bee3f8; border-radius: 8px; background: white; font-size: 0.78rem; font-weight: 600; color: #2b6cb0; cursor: pointer; transition: all 0.15s; }
+    .btn-news-refresh:hover { background: #ebf8ff; }
+    .btn-news-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+    .news-card { background: white; border-radius: 10px; padding: 0.85rem 1rem; margin-bottom: 0.65rem; box-shadow: 0 1px 4px rgba(0,0,0,0.07); display: flex; gap: 0.8rem; align-items: flex-start; border-left: 3px solid #e2e8f0; transition: border-color 0.15s; }
+    .news-card:hover { border-left-color: #2b6cb0; }
+    .news-rank { font-size: 1rem; font-weight: 800; color: #cbd5e0; min-width: 1.4rem; text-align: center; line-height: 1.3; }
+    .news-rank.top3 { color: #2b6cb0; }
+    .news-body { flex: 1; min-width: 0; }
+    .news-title { font-size: 0.88rem; font-weight: 600; color: #1a202c; line-height: 1.45; text-decoration: none; display: block; margin-bottom: 0.3rem; }
+    .news-title:hover { color: #2b6cb0; }
+    .news-comment { font-size: 0.77rem; color: #276749; background: #f0fff4; border-radius: 4px; padding: 0.15rem 0.45rem; display: inline-block; margin-bottom: 0.3rem; font-weight: 600; }
+    .news-meta { font-size: 0.72rem; color: #a0aec0; }
+    .news-empty { text-align: center; color: #a0aec0; padding: 3rem 1rem; font-size: 0.95rem; }
+    .news-loading { text-align: center; padding: 3rem 1rem; color: #718096; font-size: 0.9rem; }
+
     /* 매도·매수 신호 배지 */
     .badge-signal { font-weight: 700; }
     .sig-sell     { background: #fff5f5; color: #c53030; border: 1.5px solid #feb2b2; animation: sig-pulse 1.8s ease-in-out infinite; }
@@ -358,9 +378,11 @@
     <button class="tab-btn" id="tab-us" onclick="switchMarket('us')">🇺🇸 미국주 (S&P 500)</button>
     <button class="tab-btn" id="tab-verify" onclick="switchMarket('verify')">📊 투자 검증</button>
     <button class="tab-btn" id="tab-fav" onclick="switchMarket('fav')">⭐ 관심종목 <span id="fav-count"></span></button>
+    <button class="tab-btn" id="tab-news" onclick="switchMarket('news')">📰 뉴스</button>
   </div>
 
   <div id="fav-section" style="display:none"></div>
+  <div id="news-section" style="display:none"></div>
 
   <div id="verify-section">
     <div class="verify-market-tabs">
@@ -487,16 +509,20 @@
     currentMarket = market;
     const isVerify = market === 'verify';
     const isFav    = market === 'fav';
+    const isNews   = market === 'news';
     document.getElementById('tab-kr').classList.toggle('active', market === 'kr');
     document.getElementById('tab-us').classList.toggle('active', market === 'us');
     document.getElementById('tab-verify').classList.toggle('active', isVerify);
     document.getElementById('tab-fav').classList.toggle('active', isFav);
-    document.getElementById('memo-card').style.display    = (isVerify || isFav) ? 'none' : '';
-    document.getElementById('btn-analyze').style.display  = (isVerify || isFav) ? 'none' : '';
+    document.getElementById('tab-news').classList.toggle('active', isNews);
+    const hideInput = isVerify || isFav || isNews;
+    document.getElementById('memo-card').style.display    = hideInput ? 'none' : '';
+    document.getElementById('btn-analyze').style.display  = hideInput ? 'none' : '';
     document.getElementById('cached-bar').style.display   = 'none';
     document.getElementById('result-section').style.display = 'none';
     document.getElementById('verify-section').style.display = isVerify ? 'block' : 'none';
     document.getElementById('fav-section').style.display    = isFav    ? 'block' : 'none';
+    document.getElementById('news-section').style.display   = isNews   ? 'block' : 'none';
     document.getElementById('short-section').innerHTML    = '';
     document.getElementById('long-section').innerHTML     = '';
     document.getElementById('history-section').innerHTML  = '';
@@ -513,6 +539,8 @@
       loadVerifyData();
     } else if (isFav) {
       renderFavSection();
+    } else if (isNews) {
+      loadNewsSection();
     } else {
       const placeholders = {
         kr: '예: 반도체 섹터 위주로 봐줘 / 배당주 중심으로 / 최근 실적 개선 종목 위주',
@@ -1170,6 +1198,80 @@
           })()}
         </div>`;
     });
+  }
+
+  // ── 뉴스 탭 ──────────────────────────────────────────────────
+  let newsLoadedAt = null;
+
+  async function loadNewsSection(force = false) {
+    const sec = document.getElementById('news-section');
+    // 5분 이내 로드된 데이터는 재사용
+    if (!force && newsLoadedAt && (Date.now() - newsLoadedAt < 5 * 60 * 1000) && sec.querySelector('.news-card')) return;
+
+    sec.innerHTML = `
+      <div class="news-toolbar">
+        <div><div class="news-toolbar-title">📰 주식 주요 뉴스 Top 10</div>
+        <div class="news-toolbar-sub">Gemini가 시장 영향력 기준으로 선별</div></div>
+        <button class="btn-news-refresh" disabled>⏳ 로딩중...</button>
+      </div>
+      <div class="news-loading">뉴스를 불러오는 중입니다...<br/><small style="color:#a0aec0">Gemini 분석 포함 약 5~10초 소요됩니다</small></div>`;
+
+    try {
+      const res  = await fetch('/api/news');
+      const data = await res.json();
+      newsLoadedAt = Date.now();
+      renderNews(data.news || [], sec);
+    } catch(e) {
+      sec.innerHTML = `<div class="news-empty">뉴스를 불러오지 못했습니다.<br/><small>${e.message}</small></div>`;
+    }
+  }
+
+  function renderNews(items, sec) {
+    if (!items.length) {
+      sec.innerHTML = '<div class="news-empty">뉴스 데이터가 없습니다.</div>';
+      return;
+    }
+    const now = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    const cards = items.map((item, i) => {
+      const rank  = i + 1;
+      const top3  = rank <= 3 ? ' top3' : '';
+      const pub   = item.published ? _relTime(item.published) : '';
+      const src   = item.source ? `${item.source}${pub ? ' · ' + pub : ''}` : pub;
+      const comment = item.comment
+        ? `<span class="news-comment">💬 ${item.comment}</span><br/>`
+        : '';
+      const href = item.url ? `href="${item.url}" target="_blank" rel="noopener"` : '';
+      return `
+        <div class="news-card">
+          <span class="news-rank${top3}">${rank}</span>
+          <div class="news-body">
+            ${comment}
+            <a class="news-title" ${href}>${item.title}</a>
+            ${src ? `<span class="news-meta">${src}</span>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    sec.innerHTML = `
+      <div class="news-toolbar">
+        <div><div class="news-toolbar-title">📰 주식 주요 뉴스 Top 10</div>
+        <div class="news-toolbar-sub">Gemini 선별 · ${now} 기준</div></div>
+        <button class="btn-news-refresh" onclick="loadNewsSection(true)">🔄 새로고침</button>
+      </div>
+      ${cards}`;
+  }
+
+  function _relTime(pubStr) {
+    try {
+      const d = new Date(pubStr);
+      if (isNaN(d)) return '';
+      const diff = Math.floor((Date.now() - d) / 60000);
+      if (diff < 1)  return '방금';
+      if (diff < 60) return `${diff}분 전`;
+      const h = Math.floor(diff / 60);
+      if (h < 24)    return `${h}시간 전`;
+      return `${Math.floor(h / 24)}일 전`;
+    } catch { return ''; }
   }
 
   // ── 시장 지수 티커 ─────────────────────────────────────────────
