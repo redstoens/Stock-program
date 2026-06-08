@@ -540,12 +540,15 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
         "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
     }
 
-    # 오늘 분석 결과 신규 추가 (같은 날 중복 방지)
-    existing_today = {r["code"] for r in track["records"] if r["rec_date"] == today}
+    # 오늘 분석 결과 신규 추가
+    # existing_today: 같은 날 중복 방지
+    # existing_active: 이미 진행중인 종목은 새 진입가로 덮지 않음 (기존 레코드 유지)
+    existing_today  = {r["code"] for r in track["records"] if r["rec_date"] == today}
+    existing_active = {r["code"] for r in track["records"] if r["status"] == "진행중"}
     added = 0
     for stock in analyzed:
         code = stock.get("code", "")
-        if not code or code in existing_today:
+        if not code or code in existing_today or code in existing_active:
             continue
         entry_price = stock.get("current_price_raw", 0)
         if not entry_price:
