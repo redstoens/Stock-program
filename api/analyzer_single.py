@@ -55,7 +55,7 @@ def _validate_and_fetch(symbol: str) -> dict | None:
             if data["prev_close"]:
                 data["change_pct"] = round((price - data["prev_close"]) / data["prev_close"] * 100, 2)
 
-        # 기본 재무지표 (느릴 수 있어 try/except)
+        # 기본 재무지표
         try:
             info = ticker.info
             per = info.get("trailingPE") or info.get("forwardPE")
@@ -68,6 +68,48 @@ def _validate_and_fetch(symbol: str) -> dict | None:
             data["operating_margin"] = round(float(op_margin) * 100, 1) if op_margin else None
             div = info.get("dividendYield")
             data["dividend_yield"]   = round(float(div) * 100, 2) if div else None
+        except Exception:
+            pass
+
+        # 다음 실적발표일 — 미래 날짜만 사용
+        try:
+            import datetime
+            today = datetime.date.today()
+
+            def _parse_date(val):
+                if val is None:
+                    return None
+                if hasattr(val, "date"):        # datetime/Timestamp
+                    return val.date()
+                if hasattr(val, "year"):        # date
+                    return val
+                ts = float(val)                 # Unix timestamp
+                return datetime.date.fromtimestamp(ts)
+
+            # ticker.calendar 시도
+            cal = ticker.calendar
+            candidates = []
+            if isinstance(cal, dict):
+                ed = cal.get("Earnings Date")
+                if ed:
+                    for v in (ed if isinstance(ed, (list, tuple)) else [ed]):
+                        d = _parse_date(v)
+                        if d and d >= today:
+                            candidates.append(d)
+            # ticker.earnings_dates 시도 (DataFrame)
+            try:
+                ed_df = ticker.earnings_dates
+                if ed_df is not None and not ed_df.empty:
+                    for idx in ed_df.index:
+                        d = _parse_date(idx)
+                        if d and d >= today:
+                            candidates.append(d)
+            except Exception:
+                pass
+
+            if candidates:
+                next_ed = min(candidates)
+                data["next_earnings"] = next_ed.strftime("%Y년 %m월 %d일")
         except Exception:
             pass
 
@@ -184,6 +226,8 @@ def analyze_single_stock(query: str) -> dict:
         if yf_data.get("operating_margin"): fund_lines.append(f"영업이익률: {yf_data['operating_margin']}%")
         if yf_data.get("dividend_yield"):   fund_lines.append(f"배당수익률: {yf_data['dividend_yield']}%")
 
+        next_earnings_rt = yf_data.get("next_earnings")  # 실시간 실적발표일
+
         data_lines = [
             f"ticker: {symbol}",
             f"현재가(실시간): {price_str}",
@@ -196,12 +240,16 @@ def analyze_single_stock(query: str) -> dict:
                 if yf_data.get("ma20") else "",
             f"시가총액: {yf_data['market_cap']:,.0f}" if yf_data.get("market_cap") else "",
             "재무지표(yfinance): " + ", ".join(fund_lines) if fund_lines else "",
+            f"다음 실적발표일(yfinance 실시간): {next_earnings_rt} ← 이 값을 next_earnings 필드에 그대로 사용"
+                if next_earnings_rt else "",
         ]
         data_section = "\n".join(l for l in data_lines if l)
         price_instruction = (
             f"▶ current_price 는 반드시 '{price_str}' 을 그대로 사용하세요. "
             f"target_price·stop_loss 는 현재가 {price_str} 기준으로 계산하세요. "
             f"yfinance 재무지표가 있으면 그 값을 우선 사용하고, 없으면 학습 지식으로 추정하세요."
+            + (f" 다음 실적발표일은 반드시 '{next_earnings_rt}' 을 사용하세요." if next_earnings_rt else
+               " 다음 실적발표일은 학습 지식 기반 추정이므로 불확실하면 '확인 필요'로 표시하세요.")
         )
         data_note = ""
     else:
@@ -280,13 +328,16 @@ def analyze_single_stock(query: str) -> dict:
         result["current_price"] = price_str
         result["change_pct"]    = chg_str
         result["_realtime"]     = True
-        # yfinance 재무지표로 덮어쓰기
+        # yfinance 실데이터로 덮어쓰기
         for field, key in [("per","per"),("pbr","pbr"),("roe","roe"),
                            ("operating_margin","operating_margin"),
                            ("dividend_yield","dividend_yield")]:
             if yf_data.get(key) is not None:
                 unit = "%" if key in ("roe","operating_margin","dividend_yield") else "x"
                 result[field] = f"{yf_data[key]}{unit}"
+        # 다음 실적발표일 — yfinance 실시간 값으로 강제 덮어쓰기
+        if yf_data.get("next_earnings"):
+            result["next_earnings"] = yf_data["next_earnings"]
     else:
         result["_realtime"] = False
 
