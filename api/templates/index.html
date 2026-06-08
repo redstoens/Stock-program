@@ -394,7 +394,43 @@
     .vdf-clear:hover { color: #c53030; border-color: #fed7d7; }
     .vdf-count { font-size: 0.76rem; color: #a0aec0; margin-left: auto; white-space: nowrap; }
 
-    .verify-table-wrap { overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    /* ── 검증 카드 그리드 ── */
+    .vc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 0.85rem; }
+    .vc-card { background: white; border-radius: 14px; padding: 1rem 1.1rem 0.85rem; box-shadow: 0 2px 8px rgba(0,0,0,0.07); border: 1.5px solid #e2e8f0; border-left-width: 4px; transition: box-shadow 0.15s, transform 0.15s; cursor: pointer; }
+    .vc-card:hover { box-shadow: 0 5px 18px rgba(0,0,0,0.12); transform: translateY(-2px); }
+    .vc-card.진행중  { border-left-color: #2b6cb0; }
+    .vc-card.목표달성 { border-left-color: #276749; }
+    .vc-card.손절    { border-left-color: #c53030; }
+    .vc-card.만료    { border-left-color: #d69e2e; }
+    .vc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; margin-bottom: 0.3rem; }
+    .vc-name-wrap { min-width: 0; }
+    .vc-name { font-weight: 700; font-size: 0.95rem; color: #1a202c; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vc-sub  { font-size: 0.72rem; color: #a0aec0; margin-top: 0.1rem; display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; }
+    .vc-return { font-size: 1.85rem; font-weight: 900; line-height: 1; margin: 0.55rem 0 0; letter-spacing: -0.02em; }
+    .vc-return.pos { color: #276749; }
+    .vc-return.neg { color: #c53030; }
+    .vc-return.neu { color: #718096; }
+    .vc-return-sub { font-size: 0.72rem; color: #a0aec0; margin-top: 0.15rem; }
+    .vc-prog-wrap { margin: 0.8rem 0 0.25rem; }
+    .vc-prog-rail { position: relative; height: 8px; border-radius: 4px; background: #e2e8f0; margin: 0.45rem 0 0.3rem; }
+    .vc-prog-fill { height: 100%; border-radius: 4px; }
+    .vc-prog-fill.pos { background: linear-gradient(to right, #e2e8f0 0%, #48bb78 100%); }
+    .vc-prog-fill.neg { background: linear-gradient(to right, #fc8181 0%, #e2e8f0 100%); background-position: right; }
+    .vc-prog-fill.full-pos { background: #48bb78; }
+    .vc-prog-fill.full-neg { background: #fc8181; }
+    .vc-prog-fill.gray     { background: #cbd5e0; }
+    .vc-prog-dot { position: absolute; top: 50%; width: 14px; height: 14px; background: #2b6cb0; border: 2.5px solid white; border-radius: 50%; transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0,0,0,0.28); pointer-events: none; }
+    .vc-prog-labels { display: flex; justify-content: space-between; font-size: 0.67rem; color: #a0aec0; }
+    .vc-prog-labels .lbl-stop   { color: #c53030; }
+    .vc-prog-labels .lbl-target { color: #276749; }
+    .vc-prices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.2rem; margin-top: 0.75rem; padding-top: 0.65rem; border-top: 1px solid #f0f4f8; }
+    .vc-price-item { text-align: center; }
+    .vc-price-lbl { font-size: 0.63rem; color: #a0aec0; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .vc-price-val { font-size: 0.8rem; font-weight: 700; color: #2d3748; margin-top: 0.15rem; }
+    .vc-price-val.target { color: #276749; }
+    .vc-price-val.stop   { color: #c53030; }
+    .vc-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 0.65rem; font-size: 0.71rem; color: #a0aec0; }
+    .vc-empty { text-align: center; padding: 3rem 1rem; color: #a0aec0; font-size: 0.9rem; grid-column: 1 / -1; }
 
     /* AI 성과 통계 */
     .perf-stats-card { background: white; border-radius: 12px; padding: 1.1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 1.2rem; }
@@ -418,20 +454,11 @@
     .sp-ret.neg { color: #9b2c2c; }
     .sp-ret.neu { color: #a0aec0; }
     .sp-cnt { font-size: 0.7rem; color: #a0aec0; min-width: 2.5rem; text-align: right; }
-    .verify-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
-    .verify-table th { background: #f7fafc; padding: 0.7rem 0.75rem; text-align: left; font-size: 0.72rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
-    .verify-table td { padding: 0.7rem 0.75rem; border-bottom: 1px solid #f0f4f8; vertical-align: middle; white-space: nowrap; }
-    .verify-table tr:last-child td { border-bottom: none; }
-    .verify-table tr:hover td { background: #f7fafc; }
-    .vt-ret.pos { color: #276749; font-weight: 700; }
-    .vt-ret.neg { color: #c53030; font-weight: 700; }
-    .vt-ret.neu { color: #718096; }
     .status-badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
     .status-진행중   { background: #ebf8ff; color: #2b6cb0; }
     .status-목표달성 { background: #f0fff4; color: #276749; }
     .status-손절     { background: #fff5f5; color: #c53030; }
     .status-만료     { background: #fffbeb; color: #744210; }
-    .verify-empty { text-align: center; padding: 3rem 1rem; color: #a0aec0; font-size: 0.9rem; }
     .verify-avg { background: #f0fff4; border: 1.5px solid #9ae6b4; border-radius: 10px; padding: 0.75rem 1.25rem; margin-bottom: 1rem; font-size: 0.85rem; color: #276749; display: flex; gap: 1.5rem; flex-wrap: wrap; }
     .verify-avg span { font-weight: 700; }
 
@@ -627,24 +654,7 @@
       </div>
       <span class="vdf-count" id="vdf-count"></span>
     </div>
-    <div class="verify-table-wrap">
-      <table class="verify-table">
-        <thead>
-          <tr>
-            <th>추천일</th>
-            <th>종목명</th>
-            <th>투자유형</th>
-            <th>진입가</th>
-            <th>목표가</th>
-            <th>손절가</th>
-            <th>현재가</th>
-            <th>수익률</th>
-            <th>상태</th>
-          </tr>
-        </thead>
-        <tbody id="verify-tbody"></tbody>
-      </table>
-    </div>
+    <div id="verify-cards" class="vc-grid"></div>
   </div>
 
   <div id="memo-card" class="card">
@@ -825,8 +835,8 @@
         } catch(e) {}
       }
     } catch(e) {
-      document.getElementById('verify-tbody').innerHTML =
-        '<tr><td colspan="9" class="verify-empty">데이터를 불러올 수 없습니다.</td></tr>';
+      document.getElementById('verify-cards').innerHTML =
+        '<div class="vc-empty">데이터를 불러올 수 없습니다.</div>';
     }
   }
 
@@ -1123,40 +1133,83 @@
       avgBar.style.display = 'none';
     }
 
-    // 테이블
-    const tbody = document.getElementById('verify-tbody');
+    // 카드 그리드
+    const grid = document.getElementById('verify-cards');
     if (records.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="verify-empty">해당 항목이 없습니다.</td></tr>';
+      grid.innerHTML = '<div class="vc-empty">해당 항목이 없습니다.</div>';
       return;
     }
-    tbody.innerHTML = records.map(r => {
-      const hasRet = r.current_return_pct != null;
-      const retPct = r.current_return_pct ?? 0;
-      const sign   = retPct >= 0 ? '+' : '';
-      const retCls = retPct > 0 ? 'pos' : retPct < 0 ? 'neg' : 'neu';
-      const retStr = r.status !== '진행중' ? '-'
-                   : !hasRet ? '<span style="color:#a0aec0;font-size:0.8em">로딩중…</span>'
-                   : `${sign}${retPct.toFixed(2)}%`;
-      const isUS = currentVerifyMarket === 'us';
-      const fmtPrice = (p) => !p ? '-' : isUS
-        ? '$' + Number(p).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
-        : Number(p).toLocaleString() + '원';
-      const curPrice   = fmtPrice(r.current_price);
-      const entryPrice = fmtPrice(r.entry_price);
-      const tgt  = r.target_str  || '-';
-      const sl   = r.stop_loss_str ? r.stop_loss_str.split('(')[0].trim() : '-';
-      const horiz = r.investment_horizon || r.hold_period || '-';
-      return `<tr>
-        <td>${r.rec_date}</td>
-        <td class="vt-name-cell" onclick="openVerifyModal('${r.rec_date}', '${r.code}')"><b>${r.name}</b>${r.source === 'manual' ? '<span class="vt-manual-badge">직접분석</span>' : ''}<br><span style="font-size:0.75rem;color:#a0aec0">${r.code}</span></td>
-        <td>${horiz}</td>
-        <td>${entryPrice}</td>
-        <td style="color:#276749">${tgt}</td>
-        <td style="color:#c53030">${sl}</td>
-        <td>${curPrice}</td>
-        <td class="vt-ret ${retCls}">${retStr}</td>
-        <td><span class="status-badge status-${r.status}">${r.status}</span></td>
-      </tr>`;
+    const isUS = currentVerifyMarket === 'us';
+    const fmtP = (p) => !p ? '-' : isUS
+      ? '$' + Number(p).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : Number(p).toLocaleString() + '원';
+
+    grid.innerHTML = records.map(r => {
+      const retPct  = r.current_return_pct ?? 0;
+      const sign    = retPct >= 0 ? '+' : '';
+      const retCls  = retPct > 0 ? 'pos' : retPct < 0 ? 'neg' : 'neu';
+      const loading = r.status === '진행중' && r.current_return_pct == null;
+      const retTxt  = loading ? '...' : `${sign}${retPct.toFixed(2)}%`;
+      const retSub  = loading ? '현재가 로딩중'
+                   : r.status === '진행중' ? `현재가 ${fmtP(r.current_price)}`
+                   : r.status === '목표달성' ? `🎯 목표 달성`
+                   : r.status === '손절'    ? `🔴 손절 확정`
+                   : '기간 만료';
+
+      // 진행 바 계산
+      const tgt  = r.target_price_raw  || 0;
+      const sl   = r.stop_loss_raw     || 0;
+      const ent  = r.entry_price       || 0;
+      const cur  = r.current_price     || ent;
+      let barFillPct = 50, barDotPct = 50, fillCls = 'gray', showDot = false;
+      if (r.status === '목표달성') { barFillPct = 100; fillCls = 'full-pos'; }
+      else if (r.status === '손절') { barFillPct = 100; fillCls = 'full-neg'; }
+      else if (r.status === '만료') { barFillPct = 50;  fillCls = 'gray'; }
+      else if (tgt > 0 && sl > 0 && tgt > sl) {
+        const range = tgt - sl;
+        barDotPct = Math.max(2, Math.min(98, (cur - sl) / range * 100));
+        barFillPct = barDotPct;
+        fillCls = cur >= ent ? 'pos' : 'neg';
+        showDot = true;
+      }
+
+      const tgtStr = r.target_str  ? r.target_str.split('(')[0].trim() : '-';
+      const slStr  = r.stop_loss_str ? r.stop_loss_str.split('(')[0].trim() : '-';
+      const horiz  = r.investment_horizon || r.hold_period || '-';
+      const manualBadge = r.source === 'manual'
+        ? '<span style="background:#e9d8fd;color:#6b46c1;padding:1px 5px;border-radius:4px;font-size:0.65rem;font-weight:700">직접</span>' : '';
+
+      return `
+        <div class="vc-card ${r.status}" onclick="openVerifyModal('${r.rec_date}', '${r.code}')">
+          <div class="vc-header">
+            <div class="vc-name-wrap">
+              <span class="vc-name">${r.name}</span>
+              <div class="vc-sub">${r.code} ${manualBadge} <span>${horiz}</span></div>
+            </div>
+            <span class="status-badge status-${r.status}">${r.status}</span>
+          </div>
+          <div class="vc-return ${loading ? 'neu' : retCls}">${retTxt}</div>
+          <div class="vc-return-sub">${retSub}</div>
+          <div class="vc-prog-wrap">
+            <div class="vc-prog-rail">
+              <div class="vc-prog-fill ${fillCls}" style="width:${barFillPct}%"></div>
+              ${showDot ? `<div class="vc-prog-dot" style="left:${barDotPct}%"></div>` : ''}
+            </div>
+            <div class="vc-prog-labels">
+              <span class="lbl-stop">${slStr}</span>
+              <span class="lbl-target">${tgtStr}</span>
+            </div>
+          </div>
+          <div class="vc-prices">
+            <div class="vc-price-item"><div class="vc-price-lbl">진입가</div><div class="vc-price-val">${fmtP(r.entry_price)}</div></div>
+            <div class="vc-price-item"><div class="vc-price-lbl">현재가</div><div class="vc-price-val">${fmtP(r.current_price)}</div></div>
+            <div class="vc-price-item"><div class="vc-price-lbl">목표가</div><div class="vc-price-val target">${tgtStr}</div></div>
+          </div>
+          <div class="vc-footer">
+            <span>${r.rec_date}</span>
+            <span>손절 <b style="color:#c53030">${slStr}</b></span>
+          </div>
+        </div>`;
     }).join('');
   }
 
