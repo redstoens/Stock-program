@@ -24,6 +24,21 @@
     .idx-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.3); animation: idx-blink 2s ease-in-out infinite; }
     @keyframes idx-blink { 0%,100%{opacity:.3} 50%{opacity:1} }
 
+    /* 공포탐욕지수 */
+    .fg-bar { background: rgba(0,0,0,0.18); padding: 0.5rem 1rem; display: flex; justify-content: center; align-items: center; gap: 1.2rem; flex-wrap: wrap; }
+    .fg-score-wrap { display: flex; align-items: center; gap: 0.55rem; }
+    .fg-score-num { font-size: 1.5rem; font-weight: 900; line-height: 1; }
+    .fg-label { font-size: 0.78rem; font-weight: 700; opacity: 0.9; }
+    .fg-meter-wrap { display: flex; flex-direction: column; gap: 0.25rem; }
+    .fg-meter { position: relative; width: 200px; height: 10px; border-radius: 5px; background: linear-gradient(to right, #fc8181 0%, #f6ad55 35%, #fefcbf 50%, #9ae6b4 65%, #48bb78 100%); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .fg-marker { position: absolute; top: -4px; width: 18px; height: 18px; border-radius: 50%; background: white; border: 2.5px solid rgba(0,0,0,0.25); box-shadow: 0 1px 4px rgba(0,0,0,0.3); transform: translateX(-50%); transition: left 0.6s ease; }
+    .fg-meter-labels { display: flex; justify-content: space-between; font-size: 0.58rem; opacity: 0.6; }
+    .fg-divider { width: 1px; height: 24px; background: rgba(255,255,255,0.2); }
+    .fg-components { display: flex; gap: 1rem; }
+    .fg-comp { text-align: center; }
+    .fg-comp-val { font-size: 0.78rem; font-weight: 700; }
+    .fg-comp-lbl { font-size: 0.62rem; opacity: 0.6; margin-top: 0.1rem; }
+
     .container { max-width: 820px; margin: 0 auto; padding: 2rem 1.5rem; }
 
     .card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-bottom: 1.5rem; }
@@ -410,6 +425,23 @@
     <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">KOSDAQ</span><span class="idx-price" id="idx-kq-price">—</span><span class="idx-chg flat" id="idx-kq-chg">로딩중</span></div>
     <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">S&amp;P 500</span><span class="idx-price" id="idx-sp-price">—</span><span class="idx-chg flat" id="idx-sp-chg">로딩중</span></div>
     <div class="idx-item"><span class="idx-dot"></span><span class="idx-name">NASDAQ</span><span class="idx-price" id="idx-nq-price">—</span><span class="idx-chg flat" id="idx-nq-chg">로딩중</span></div>
+  </div>
+  <div class="fg-bar" id="fg-bar">
+    <div class="fg-score-wrap">
+      <span class="fg-score-num" id="fg-score">—</span>
+      <span class="fg-label" id="fg-label">로딩중</span>
+    </div>
+    <div class="fg-divider"></div>
+    <div class="fg-meter-wrap">
+      <div class="fg-meter"><div class="fg-marker" id="fg-marker" style="left:50%"></div></div>
+      <div class="fg-meter-labels"><span>극단적 공포</span><span>공포</span><span>중립</span><span>탐욕</span><span>극단적 탐욕</span></div>
+    </div>
+    <div class="fg-divider"></div>
+    <div class="fg-components">
+      <div class="fg-comp"><div class="fg-comp-val" id="fg-vix">—</div><div class="fg-comp-lbl">VIX</div></div>
+      <div class="fg-comp"><div class="fg-comp-val" id="fg-rsi">—</div><div class="fg-comp-lbl">RSI</div></div>
+      <div class="fg-comp"><div class="fg-comp-val" id="fg-mom">—</div><div class="fg-comp-lbl">모멘텀</div></div>
+    </div>
   </div>
 </header>
 
@@ -1540,11 +1572,48 @@
     }
   }
 
+  const FG_COLORS = {
+    '극단적 공포': '#fc8181',
+    '공포':        '#f6ad55',
+    '중립':        '#fefcbf',
+    '탐욕':        '#9ae6b4',
+    '극단적 탐욕': '#48bb78',
+  };
+
+  async function loadFearGreed() {
+    try {
+      const res  = await fetch('/api/fear-greed');
+      const data = await res.json();
+      const score = data.score ?? 50;
+      const label = data.label ?? '중립';
+      const comp  = data.components ?? {};
+
+      const scoreEl  = document.getElementById('fg-score');
+      const labelEl  = document.getElementById('fg-label');
+      const markerEl = document.getElementById('fg-marker');
+      const vixEl    = document.getElementById('fg-vix');
+      const rsiEl    = document.getElementById('fg-rsi');
+      const momEl    = document.getElementById('fg-mom');
+
+      if (scoreEl) { scoreEl.textContent = score; scoreEl.style.color = FG_COLORS[label] || '#fff'; }
+      if (labelEl) { labelEl.textContent = label; labelEl.style.color = FG_COLORS[label] || '#fff'; }
+      if (markerEl) markerEl.style.left = `${score}%`;
+      if (vixEl)  vixEl.textContent  = `VIX ${data.vix ?? '—'}`;
+      if (rsiEl)  rsiEl.textContent  = `RSI ${data.rsi ?? '—'}`;
+      if (momEl)  momEl.textContent  = comp.momentum != null ? comp.momentum : '—';
+    } catch(e) {
+      const el = document.getElementById('fg-label');
+      if (el) el.textContent = '오류';
+    }
+  }
+
   window.addEventListener('load', () => {
     loadCachedData();
     updateFavTab();
     loadMarketIndex();
     setInterval(loadMarketIndex, 60000);
+    loadFearGreed();
+    setInterval(loadFearGreed, 300000);
     // 즐겨찾기 탭을 위해 반대 시장 데이터도 백그라운드 로드
     const otherMarket = currentMarket === 'kr' ? 'us' : 'kr';
     fetch(`/api/cached-${otherMarket}`)
