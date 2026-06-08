@@ -46,7 +46,7 @@
     .hist-note { font-size: 0.75rem; color: #a0aec0; background: #fffbeb; border: 1px solid #fbd38d; border-radius: 8px; padding: 0.4rem 0.75rem; margin-bottom: 0.75rem; }
 
     /* 섹터 분산 */
-    .sector-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 1.2rem; padding: 0.65rem 0.9rem; background: white; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .sector-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-bottom: 0.55rem; padding: 0.65rem 0.9rem; background: white; border-radius: 10px 10px 0 0; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
     .sector-bar-label { font-size: 0.72rem; font-weight: 700; color: #a0aec0; margin-right: 0.15rem; white-space: nowrap; }
     .sp { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.22rem 0.6rem; border-radius: 999px; font-size: 0.76rem; font-weight: 600; border: 1.5px solid; cursor: pointer; transition: all 0.15s; }
     .sp:hover { filter: brightness(0.93); }
@@ -55,9 +55,15 @@
     .sp-3 { background: #e9d8fd; color: #553c9a; border-color: #d6bcfa; }
     .sp-hi { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
     .sp-count { font-size: 0.82em; opacity: 0.75; }
+    .sp-trend { font-size: 0.78em; margin-left: 0.1rem; }
     .sp.sp-active { box-shadow: 0 0 0 2.5px currentColor; opacity: 1; font-weight: 800; }
     .sp-reset { display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700; border: 1.5px solid #fc8181; background: #fff5f5; color: #c53030; cursor: pointer; transition: all 0.15s; }
     .sp-reset:hover { background: #fed7d7; }
+    .sector-trend-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 1.2rem; padding: 0.5rem 0.9rem; background: #f8fafc; border-radius: 0 0 10px 10px; border-top: 1px dashed #e2e8f0; box-shadow: 0 2px 6px rgba(0,0,0,0.04); font-size: 0.75rem; }
+    .stb-label { font-weight: 700; color: #a0aec0; white-space: nowrap; }
+    .stb-rising { color: #276749; font-weight: 700; }
+    .stb-falling { color: #9b2c2c; font-weight: 700; }
+    .stb-sep { color: #cbd5e0; }
 
     /* 과거 리포트 비교 */
     .history-box { background: #fffbeb; border: 1.5px solid #f6e05e; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.5rem; }
@@ -416,6 +422,7 @@
     <p class="result-meta" id="result-meta"></p>
     <div id="date-selector-row"></div>
     <div id="sector-bar"></div>
+    <div id="sector-trend-bar"></div>
     <div id="history-section"></div>
     <div id="short-section"></div>
     <div id="long-section"></div>
@@ -479,6 +486,7 @@
     selectedHistDate   = null;
     activeSectorFilter = null;
     sectorFilterStocks = [];
+    document.getElementById('sector-trend-bar').innerHTML = '';
 
     if (isVerify) {
       currentVerifyMarket = 'kr';
@@ -1365,11 +1373,13 @@
 
     // 스냅샷 없는 구 기록 안내
     const hasOld = stocks.some(s => s._no_snap);
-    const sectorEl = document.getElementById('sector-bar');
-    sectorEl.innerHTML = hasOld
-      ? '<div class="hist-note">⚠️ 이 날짜는 분석 스냅샷이 없어 간략 정보만 표시됩니다. (2026-06-09 이후 기록부터 전체 카드 표시)</div>'
-      : '';
-    if (!hasOld) renderSectorBar(stocks);
+    if (hasOld) {
+      document.getElementById('sector-bar').innerHTML =
+        '<div class="hist-note">⚠️ 이 날짜는 분석 스냅샷이 없어 간략 정보만 표시됩니다. (2026-06-09 이후 기록부터 전체 카드 표시)</div>';
+      document.getElementById('sector-trend-bar').innerHTML = '';
+    } else {
+      renderSectorBar(stocks);
+    }
 
     document.getElementById('short-section').innerHTML = '';
     document.getElementById('long-section').innerHTML  = '';
@@ -1384,27 +1394,86 @@
     _drawSectorBar();
   }
 
-  function _drawSectorBar() {
-    const el = document.getElementById('sector-bar');
-    if (!sectorFilterStocks.length) { el.innerHTML = ''; return; }
+  // 섹터별 모멘텀 점수 (0~100)
+  function _sectorScore(stocks) {
+    let total = 0, cnt = 0;
+    stocks.forEach(s => {
+      let score = 50;
+      const bs = parseFloat(s.buy_score);
+      if (!isNaN(bs)) {
+        score = bs;
+      } else {
+        const rsi = parseFloat(s.rsi);
+        if (!isNaN(rsi)) {
+          if      (rsi >= 70) score -= 15;
+          else if (rsi >= 60) score += 10;
+          else if (rsi <= 30) score += 8;
+          else if (rsi <= 40) score -= 8;
+        }
+        const macd = (s.macd_signal || '').toLowerCase();
+        if (macd.includes('골든')) score += 15;
+        if (macd.includes('데드')) score -= 15;
+        const pct = parseFloat((s.week52_pct_from_high || '').replace('%', ''));
+        if (!isNaN(pct)) {
+          if      (pct >= -5)  score += 10;
+          else if (pct >= -15) score += 2;
+          else if (pct <= -30) score -= 12;
+        }
+      }
+      total += Math.min(100, Math.max(0, score));
+      cnt++;
+    });
+    return cnt ? total / cnt : 50;
+  }
 
-    const count = {};
+  function _drawSectorBar() {
+    const el      = document.getElementById('sector-bar');
+    const trendEl = document.getElementById('sector-trend-bar');
+    if (!sectorFilterStocks.length) { el.innerHTML = ''; trendEl.innerHTML = ''; return; }
+
+    // 섹터별 종목 그룹핑
+    const groups = {};
     sectorFilterStocks.forEach(s => {
       const key = (s.sector || s.stock_type || '기타').trim();
-      count[key] = (count[key] || 0) + 1;
+      (groups[key] = groups[key] || []).push(s);
     });
 
-    const sorted = Object.entries(count).sort((a, b) => b[1] - a[1]);
-    const pills = sorted.map(([name, n]) => {
+    // 점수 계산
+    const scores = {};
+    Object.entries(groups).forEach(([k, arr]) => { scores[k] = _sectorScore(arr); });
+
+    const sorted = Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+    const pills = sorted.map(([name, arr]) => {
+      const n      = arr.length;
       const cls    = n >= 4 ? 'sp-hi' : n === 3 ? 'sp-3' : n === 2 ? 'sp-2' : 'sp-1';
       const active = name === activeSectorFilter ? ' sp-active' : '';
-      return `<span class="sp ${cls}${active}" onclick="filterBySector('${name.replace(/'/g, "\\'")}')">${name}<span class="sp-count">${n}</span></span>`;
+      const sc     = scores[name];
+      const arrow  = sc >= 62 ? '<span class="sp-trend" style="color:#276749">▲</span>'
+                   : sc <= 38 ? '<span class="sp-trend" style="color:#9b2c2c">▼</span>'
+                   : '';
+      return `<span class="sp ${cls}${active}" onclick="filterBySector('${name.replace(/'/g, "\\'")}')">${name}${arrow}<span class="sp-count">${n}</span></span>`;
     }).join('');
     const resetBtn = activeSectorFilter
       ? `<span class="sp-reset" onclick="filterBySector(null)">✕ 전체</span>`
       : '';
-
     el.innerHTML = `<span class="sector-bar-label">섹터 분산</span>${pills}${resetBtn}`;
+
+    // 트렌드 요약 바
+    const ranked = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const rising  = ranked.filter(([,v]) => v >= 62).map(([k]) => k);
+    const falling = ranked.filter(([,v]) => v <= 38).map(([k]) => k);
+    if (rising.length === 0 && falling.length === 0) {
+      trendEl.innerHTML = '';
+      return;
+    }
+    const risingHtml  = rising.length
+      ? `<span class="stb-label">🔥 강세</span>${rising.map(k => `<span class="stb-rising" style="cursor:pointer" onclick="filterBySector('${k.replace(/'/g,"\\'")}')">▲ ${k}</span>`).join('<span class="stb-sep"> · </span>')}`
+      : '';
+    const sep = rising.length && falling.length ? '<span class="stb-sep" style="margin:0 0.3rem">|</span>' : '';
+    const fallingHtml = falling.length
+      ? `<span class="stb-label">📉 약세</span>${falling.map(k => `<span class="stb-falling" style="cursor:pointer" onclick="filterBySector('${k.replace(/'/g,"\\'")}')">▼ ${k}</span>`).join('<span class="stb-sep"> · </span>')}`
+      : '';
+    trendEl.innerHTML = risingHtml + sep + fallingHtml;
   }
 
   function filterBySector(name) {
