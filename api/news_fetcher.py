@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from email.utils import parsedate_to_datetime
@@ -51,6 +52,24 @@ def _parse_rss(url: str) -> list[dict]:
     return items
 
 
+def _normalize(title: str) -> str:
+    """중복 비교용 정규화: 태그·출처 제거 후 소문자화."""
+    t = re.sub(r'\[.*?\]|\(.*?\)', '', title)   # [속보], (종합) 등 제거
+    t = re.sub(r'[=|·…""\'\-]+.*$', '', t)      # 구분자 이후 출처 제거
+    t = re.sub(r'\s+', ' ', t).strip().lower()
+    return t
+
+
+def _is_similar(norm_a: str, norm_b: str, threshold: float = 0.55) -> bool:
+    """단어 집합 겹침 비율로 유사 기사 판별."""
+    wa = set(norm_a.split())
+    wb = set(norm_b.split())
+    if len(wa) < 3 or len(wb) < 3:
+        return norm_a[:20] == norm_b[:20]
+    overlap = len(wa & wb) / min(len(wa), len(wb))
+    return overlap >= threshold
+
+
 def _fetch_raw(limit: int = 30) -> list[dict]:
     raw: list[dict] = []
     with ThreadPoolExecutor(max_workers=3) as ex:
@@ -61,13 +80,17 @@ def _fetch_raw(limit: int = 30) -> list[dict]:
             except Exception:
                 pass
 
-    seen, deduped = set(), []
+    deduped: list[dict] = []
+    norms: list[str] = []
+
     for item in sorted(raw, key=lambda x: x["_ts"], reverse=True):
-        key = item["title"][:25]
-        if key not in seen:
-            seen.add(key)
-            clean = {k: v for k, v in item.items() if k != "_ts"}
-            deduped.append(clean)
+        norm = _normalize(item["title"])
+        # 이미 추가된 기사와 유사하면 건너뜀
+        if any(_is_similar(norm, n) for n in norms):
+            continue
+        norms.append(norm)
+        deduped.append({k: v for k, v in item.items() if k != "_ts"})
+
     return deduped[:limit]
 
 
