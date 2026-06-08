@@ -257,6 +257,29 @@
     .vdf-count { font-size: 0.76rem; color: #a0aec0; margin-left: auto; white-space: nowrap; }
 
     .verify-table-wrap { overflow-x: auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+    /* AI 성과 통계 */
+    .perf-stats-card { background: white; border-radius: 12px; padding: 1.1rem 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 1.2rem; }
+    .perf-stats-title { font-size: 0.82rem; font-weight: 700; color: #4a5568; margin-bottom: 0.9rem; }
+    .perf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
+    @media (max-width: 580px) { .perf-grid { grid-template-columns: repeat(2, 1fr); } }
+    .perf-cell { text-align: center; padding: 0.65rem 0.3rem; background: #f7fafc; border-radius: 8px; }
+    .perf-val { font-size: 1.4rem; font-weight: 800; line-height: 1.2; }
+    .perf-val.pos { color: #276749; }
+    .perf-val.neg { color: #9b2c2c; }
+    .perf-val.neu { color: #2b6cb0; }
+    .perf-lbl { font-size: 0.68rem; color: #a0aec0; font-weight: 600; margin-top: 0.25rem; }
+    .perf-sector-title { font-size: 0.7rem; font-weight: 700; color: #a0aec0; margin-bottom: 0.5rem; }
+    .sector-perf { display: flex; flex-direction: column; gap: 0.45rem; }
+    .sector-perf-row { display: flex; align-items: center; gap: 0.55rem; font-size: 0.78rem; }
+    .sp-name { min-width: 5rem; font-weight: 600; color: #4a5568; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sp-bar-wrap { flex: 1; background: #edf2f7; border-radius: 999px; height: 6px; overflow: hidden; }
+    .sp-bar-fill { height: 100%; border-radius: 999px; transition: width 0.4s ease; }
+    .sp-ret { min-width: 4rem; text-align: right; font-weight: 700; white-space: nowrap; }
+    .sp-ret.pos { color: #276749; }
+    .sp-ret.neg { color: #9b2c2c; }
+    .sp-ret.neu { color: #a0aec0; }
+    .sp-cnt { font-size: 0.7rem; color: #a0aec0; min-width: 2.5rem; text-align: right; }
     .verify-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
     .verify-table th { background: #f7fafc; padding: 0.7rem 0.75rem; text-align: left; font-size: 0.72rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
     .verify-table td { padding: 0.7rem 0.75rem; border-bottom: 1px solid #f0f4f8; vertical-align: middle; white-space: nowrap; }
@@ -392,6 +415,7 @@
     <div id="sim-section"></div>
     <div id="verify-summary-row" class="verify-summary"></div>
     <div id="verify-avg-bar" class="verify-avg" style="display:none"></div>
+    <div id="perf-stats-section"></div>
     <div class="verify-filter">
       <button class="vf-btn active" id="vf-all"    onclick="filterVerify('all')">전체</button>
       <button class="vf-btn" id="vf-진행중"         onclick="filterVerify('진행중')">진행중</button>
@@ -578,6 +602,7 @@
       const benchLabel = currentVerifyMarket === 'us' ? 'S&P 500' : 'KOSPI';
       renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
       renderVerify();
+      renderPerformanceStats();
 
       // 진행중 종목 현재가 비동기 fetch
       const activeCodes = verifyRecords.filter(r => r.status === '진행중').map(r => r.code);
@@ -598,7 +623,8 @@
                 : 0;
             }
           });
-          renderVerify(); // 현재가 채운 뒤 재렌더
+          renderVerify();              // 현재가 채운 뒤 재렌더
+          renderPerformanceStats();    // 성과 통계 갱신
           renderSimulation(verifyRecords, data.benchmark || {}, benchLabel);
         } catch(e) {}
       }
@@ -754,6 +780,105 @@
     document.querySelectorAll('.vdf-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('vdf-all').classList.add('active');
     renderVerify();
+  }
+
+  function renderPerformanceStats() {
+    const sec = document.getElementById('perf-stats-section');
+    if (!verifyRecords.length) { sec.innerHTML = ''; return; }
+
+    const today  = new Date();
+    const active = verifyRecords.filter(r => r.status === '진행중');
+    const closed = verifyRecords.filter(r => ['목표달성','손절','만료'].includes(r.status));
+    const total  = verifyRecords.length;
+
+    // 목표가 달성률 (종결 기준)
+    const hitRate = closed.length
+      ? Math.round(closed.filter(r => r.status === '목표달성').length / closed.length * 100)
+      : null;
+
+    // 진행중 승률 (현재가 있는 종목만)
+    const liveP   = active.filter(r => r.current_return_pct != null);
+    const winRate = liveP.length
+      ? Math.round(liveP.filter(r => r.current_return_pct > 0).length / liveP.length * 100)
+      : null;
+
+    // 진행중 평균 수익률
+    const avgRet = liveP.length
+      ? liveP.reduce((s, r) => s + r.current_return_pct, 0) / liveP.length
+      : null;
+
+    // 평균 보유 기간 (진행중)
+    const avgDays = active.length
+      ? Math.round(active.reduce((s, r) => s + Math.floor((today - new Date(r.rec_date)) / 86400000), 0) / active.length)
+      : null;
+
+    // 섹터별 집계
+    const sMap = {};
+    verifyRecords.forEach(r => {
+      const key = ((r.snapshot && (r.snapshot.sector || r.snapshot.stock_type)) || '기타').trim();
+      if (!sMap[key]) sMap[key] = {cnt: 0, rets: [], hits: 0, closedCnt: 0};
+      sMap[key].cnt++;
+      if (r.status === '목표달성') { sMap[key].hits++; sMap[key].closedCnt++; }
+      if (['손절','만료'].includes(r.status)) sMap[key].closedCnt++;
+      if (r.current_return_pct != null) sMap[key].rets.push(r.current_return_pct);
+    });
+
+    const sectorHtml = Object.entries(sMap)
+      .sort((a, b) => b[1].cnt - a[1].cnt)
+      .map(([name, sm]) => {
+        const avg = sm.rets.length ? sm.rets.reduce((a,b) => a+b,0) / sm.rets.length : null;
+        const hitR = sm.closedCnt ? Math.round(sm.hits / sm.closedCnt * 100) : null;
+        const score = avg !== null ? avg : null;
+        const barW  = score !== null ? Math.min(Math.abs(score) / 20 * 100, 100).toFixed(0) : 0;
+        const barColor = score !== null ? (score >= 0 ? '#48bb78' : '#fc8181') : '#e2e8f0';
+        let retLabel;
+        if (avg !== null) {
+          const cls = avg >= 0 ? 'pos' : 'neg';
+          retLabel = `<span class="sp-ret ${cls}">${avg >= 0 ? '+' : ''}${avg.toFixed(1)}%</span>`;
+        } else if (hitR !== null) {
+          retLabel = `<span class="sp-ret ${hitR >= 50 ? 'pos' : 'neu'}">${hitR}% 달성</span>`;
+        } else {
+          retLabel = `<span class="sp-ret neu">-</span>`;
+        }
+        return `
+          <div class="sector-perf-row">
+            <span class="sp-name" title="${name}">${name}</span>
+            <div class="sp-bar-wrap"><div class="sp-bar-fill" style="width:${barW}%;background:${barColor}"></div></div>
+            ${retLabel}
+            <span class="sp-cnt">${sm.cnt}종목</span>
+          </div>`;
+      }).join('');
+
+    function fVal(v, suf='%', dec=1) {
+      if (v === null) return '<span style="color:#a0aec0;font-size:1rem">-</span>';
+      const sign = v >= 0 && suf === '%' && dec > 0 ? '+' : '';
+      return `${sign}${typeof v === 'number' ? v.toFixed(dec) : v}${suf}`;
+    }
+    function fCls(v) { return v === null ? 'neu' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'neu'; }
+
+    sec.innerHTML = `
+      <div class="perf-stats-card">
+        <div class="perf-stats-title">🤖 AI 추천 성과 분석 <span style="font-size:0.72rem;color:#a0aec0;font-weight:400">· 총 ${total}건</span></div>
+        <div class="perf-grid">
+          <div class="perf-cell">
+            <div class="perf-val ${fCls(winRate !== null ? winRate - 50 : null)}">${winRate !== null ? winRate + '%' : '-'}</div>
+            <div class="perf-lbl">진행중 승률</div>
+          </div>
+          <div class="perf-cell">
+            <div class="perf-val ${fCls(avgRet)}">${fVal(avgRet)}</div>
+            <div class="perf-lbl">진행중 평균 수익</div>
+          </div>
+          <div class="perf-cell">
+            <div class="perf-val neu">${hitRate !== null ? hitRate + '%' : '-'}</div>
+            <div class="perf-lbl">목표가 달성률</div>
+          </div>
+          <div class="perf-cell">
+            <div class="perf-val neu">${avgDays !== null ? avgDays + '일' : '-'}</div>
+            <div class="perf-lbl">평균 보유 기간</div>
+          </div>
+        </div>
+        ${sectorHtml ? `<div class="perf-sector-title">섹터별 현황</div><div class="sector-perf">${sectorHtml}</div>` : ''}
+      </div>`;
   }
 
   function renderVerify() {
