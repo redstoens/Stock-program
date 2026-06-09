@@ -1626,7 +1626,7 @@
     if (!force) {
       try {
         const cached = JSON.parse(localStorage.getItem(NEWS_CACHE_KEY) || 'null');
-        if (cached && (Date.now() - cached.ts < NEWS_CACHE_TTL)) {
+        if (cached && cached.news && cached.news.length > 0 && (Date.now() - cached.ts < NEWS_CACHE_TTL)) {
           renderNews(cached.news, cached.sector_summary, cached.sector_impacts || [], sec);
           return;
         }
@@ -1732,13 +1732,21 @@
         </div>`;
     }).join('');
 
-    const arrowCls = _newsListOpen ? 'open' : '';
+    const arrowCls  = _newsListOpen ? 'open' : '';
+    const aiOk      = impacts && impacts.length > 0;
+    const subLabel  = aiOk ? `AI 분석 · ${now} 기준` : `뉴스 수집 완료 · ${now} 기준`;
+    const aiNotice  = aiOk ? '' : `
+      <div style="background:#fffbeb;border:1.5px solid #f6e05e;border-radius:10px;padding:0.7rem 1rem;margin-bottom:1rem;font-size:0.82rem;color:#744210;display:flex;align-items:center;gap:0.5rem;">
+        ⚠️ <span>AI 섹터 분석을 일시적으로 사용할 수 없습니다. <b>Gemini API 크레딧</b>을 확인해 주세요.
+        <a href="https://aistudio.google.com" target="_blank" rel="noopener" style="color:#c05621;text-decoration:underline;margin-left:4px">AI Studio 바로가기</a></span>
+      </div>`;
     sec.innerHTML = `
       <div class="news-toolbar">
         <div><div class="news-toolbar-title">📡 섹터 실시간 이슈</div>
-        <div class="news-toolbar-sub">AI 분석 · ${now} 기준</div></div>
+        <div class="news-toolbar-sub">${subLabel}</div></div>
         <button class="btn-news-refresh" onclick="loadNewsSection(true)">🔄 새로고침</button>
       </div>
+      ${aiNotice}
       ${renderSectorImpacts(impacts)}
       <div class="news-list-toggle" onclick="_toggleNewsList(this)">
         <span class="news-list-toggle-label">📰 뉴스 목록 Top ${items.length}</span>

@@ -128,26 +128,35 @@ def _analyze_sentiment(news_list: list[dict]) -> tuple[list[dict], list[dict]]:
   ]
 }}"""
 
-    client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.15,
-        ),
-    )
-    data = json.loads(response.text)
-    result_map = {it["idx"]: it for it in data.get("items", [])}
+    try:
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.15,
+            ),
+        )
+        data = json.loads(response.text)
+        result_map = {it["idx"]: it for it in data.get("items", [])}
 
-    for i, item in enumerate(news_list, 1):
-        info = result_map.get(i, {})
-        item["sector"]    = info.get("sector", "기타")
-        item["sentiment"] = info.get("sentiment", "중립")
-        item["reason"]    = info.get("reason", "")
+        for i, item in enumerate(news_list, 1):
+            info = result_map.get(i, {})
+            item["sector"]    = info.get("sector", "기타")
+            item["sentiment"] = info.get("sentiment", "중립")
+            item["reason"]    = info.get("reason", "")
 
-    sector_impacts = data.get("sector_impacts", [])
-    return news_list, sector_impacts
+        sector_impacts = data.get("sector_impacts", [])
+        return news_list, sector_impacts
+
+    except Exception:
+        # Gemini 실패(크레딧 소진·타임아웃 등) → AI 분석 없이 뉴스만 반환
+        for item in news_list:
+            item.setdefault("sector", "기타")
+            item.setdefault("sentiment", "중립")
+            item.setdefault("reason", "")
+        return news_list, []
 
 
 def _build_sector_summary(news_list: list[dict]) -> dict:
