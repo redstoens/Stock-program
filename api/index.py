@@ -20,6 +20,68 @@ from analyzer_single import analyze_single_stock
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
 
+def _safe_float(v) -> float | None:
+    if v is None or str(v).strip() in ("N/A", "", "-"):
+        return None
+    try:
+        return float(str(v).replace(",", "").replace("%", "").replace("+", ""))
+    except Exception:
+        return None
+
+
+def _pre_screen(stocks: list[dict], top_n: int = 25) -> list[dict]:
+    """펀더멘털·기술적 지표를 점수화해 Gemini에 넘길 상위 종목만 추린다."""
+    def _score(s: dict) -> int:
+        score = 0
+
+        # PER — 저평가 우대, 고평가 패널티
+        per = _safe_float(s.get("per"))
+        if per is not None:
+            if 0 < per <= 10:  score += 20
+            elif per <= 15:    score += 14
+            elif per <= 20:    score += 8
+            elif per <= 30:    score += 3
+            elif per > 50:     score -= 8
+
+        # ROE — 수익성 우대
+        roe = _safe_float(s.get("roe"))
+        if roe is not None:
+            if roe >= 20:   score += 20
+            elif roe >= 15: score += 14
+            elif roe >= 10: score += 8
+            elif roe >= 5:  score += 3
+            elif roe < 0:   score -= 15
+
+        # RSI — 과매수 패널티, 눌림목 우대
+        rsi = _safe_float(s.get("rsi"))
+        if rsi is not None:
+            if rsi > 75:            score -= 20
+            elif rsi > 70:          score -= 8
+            elif 40 <= rsi <= 60:   score += 10
+            elif 30 <= rsi < 40:    score += 15  # 눌림목
+            elif 20 <= rsi < 30:    score += 12  # 과매도 반등
+            elif rsi < 20:          score += 5
+
+        # MA 배열 신호
+        ma = s.get("ma_signal", "N/A")
+        if ma == "정배열":   score += 12
+        elif ma == "MA위":   score += 6
+        elif ma == "혼조":   score += 2
+        elif ma == "역배열": score -= 8
+
+        # 52주 고가 대비 위치 — 적정 눌림 우대
+        pct = _safe_float(s.get("week52_pct_from_high"))
+        if pct is not None:
+            if -25 <= pct <= -5:    score += 12  # 적정 눌림목
+            elif -40 <= pct < -25:  score += 8   # 가치 기회
+            elif pct > -5:          score += 5   # 고가 근처 모멘텀
+            elif pct < -50:         score -= 5   # 과도한 낙폭
+
+        return score
+
+    return sorted(stocks, key=_score, reverse=True)[:top_n]
+
+
 def _enrich_technicals(stocks: list[dict], market: str = "kr") -> None:
     """RSI·MA·MACD·거래량 신호를 yfinance 3개월 데이터로 계산해 stocks에 in-place 추가."""
     def _compute(stock: dict) -> None:
@@ -153,7 +215,10 @@ def analyze():
 
         # 1. KOSPI 시가총액 상위 스크래핑
         stocks_raw = fetch_kospi_stocks(top_n=80)
-        stock_table = format_for_prompt(stocks_raw)
+
+        # 1-1. 정량 필터링 — 80개 → 상위 25개로 압축 후 Gemini에 전달
+        screened = _pre_screen(stocks_raw, top_n=25)
+        stock_table = format_for_prompt(screened)
 
         # 2. 이전 리포트 로드
         prev_report = load_previous_report()
@@ -429,7 +494,10 @@ def analyze_us():
         memo = data.get("memo", "")
 
         stocks_raw = fetch_sp500_stocks(top_n=50)
-        stock_table = format_for_prompt_us(stocks_raw)
+
+        # 정량 필터링 — 50개 → 상위 25개로 압축
+        screened_us = _pre_screen(stocks_raw, top_n=25)
+        stock_table = format_for_prompt_us(screened_us)
         analyzed = analyze_stocks_us(stock_table, memo)
 
         stock_map = {s["code"]: s for s in stocks_raw}
