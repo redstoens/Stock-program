@@ -220,8 +220,13 @@ def analyze():
         # 1-1. 정량 필터링 — 80개 → 상위 25개로 압축 후 Gemini에 전달
         screened = _pre_screen(stocks_raw, top_n=25)
 
-        # 1-2. DART 재무지표 추가 (영업이익 트렌드·부채비율)
-        dart_data = fetch_dart_metrics([s["code"] for s in screened])
+        # 1-2. DART 재무지표 추가 (영업이익 트렌드·부채비율) — 최대 12초
+        from concurrent.futures import ThreadPoolExecutor as _TPE, TimeoutError as _TE
+        try:
+            with _TPE(max_workers=1) as _ex:
+                dart_data = _ex.submit(fetch_dart_metrics, [s["code"] for s in screened]).result(timeout=12)
+        except (_TE, Exception):
+            dart_data = {}
         for s in screened:
             d = dart_data.get(s["code"], {})
             if d:

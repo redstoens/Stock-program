@@ -787,10 +787,20 @@ def run_korean() -> dict:
             # trend_summary를 Gemini에 의존하지 않고 직접 세팅
             if trend:
                 stock["trend_summary"] = _format_trend_str(trend)
+            # trend_label / op_growth_pct — 영업이익률 YoY 변화로 계산
+            years = sorted(trend.keys(), reverse=True)
+            if len(years) >= 2:
+                om_new = trend[years[0]].get("om")
+                om_old = trend[years[1]].get("om")
+                if om_new is not None and om_old is not None and om_old != 0:
+                    pct = round((om_new - om_old) / abs(om_old) * 100, 1)
+                    stock["op_growth_pct"] = pct
+                    stock["trend_label"] = "개선" if pct >= 10 else "악화" if pct <= -10 else "보합"
             print(f"    {stock['name']}: ROE={indicators.get('roe','N/A')}% "
                   f"영업이익률={indicators.get('operating_margin','N/A')}% "
                   f"부채비율={indicators.get('debt_ratio','N/A')}% "
-                  f"트렌드={list(trend.keys())}")
+                  f"트렌드={list(trend.keys())} "
+                  f"trend_label={stock.get('trend_label','N/A')}")
     else:
         print("  DART_API_KEY 없음 — yfinance 데이터 사용")
 
