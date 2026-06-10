@@ -29,6 +29,7 @@ from analyzer import analyze_stocks
 from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
+from dart_fetcher import fetch_dart_metrics
 
 DART_KEY = os.getenv("DART_API_KEY", "")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -96,17 +97,18 @@ def _fetch_dart_all(stock_code: str, corp_map: dict) -> tuple[dict, dict]:
                 nm = item.get("idx_nm", "")
                 val = item.get("idx_val", "").replace(",", "")
                 try:
-                    if "자기자본이익률" in nm:
+                    # DART M210000 실제 필드명: 'ROE', '매출총이익률', '순이익률' 등
+                    if nm == "ROE" or "자기자본이익률" in nm:
                         roe = round(float(val), 1)
-                    elif "매출액영업이익률" in nm:
+                    elif "매출총이익률" in nm:
                         om = round(float(val), 1)
                 except Exception:
                     pass
             # 최신 연도 값을 indicators에 저장 (처음 성공한 값)
             if roe is not None and "roe" not in indicators:
                 indicators["roe"] = str(roe)
-            if om is not None and "operating_margin" not in indicators:
-                indicators["operating_margin"] = str(om)
+            if om is not None and "op_margin_trend" not in indicators:
+                indicators["op_margin_trend"] = str(om)
             # 3년 트렌드에 저장
             if roe is not None or om is not None:
                 trend[year] = {}
@@ -735,7 +737,7 @@ JSON만 반환하세요 (다른 텍스트 없이):
             # Gemini가 덮어쓰면 안 되는 필드 원본값으로 복원
             _PRESERVE = {
                 "buy_score", "buy_score_label", "consecutive_days",
-                "earnings_trend", "trend_summary",
+                "earnings_trend", "trend_summary", "trend_label", "op_growth_pct",
                 "roe", "operating_margin", "debt_ratio",
                 "rsi", "rsi_signal", "ma20", "ma60", "ma_signal",
                 "macd_hist", "macd_signal", "tech_summary",
@@ -801,6 +803,24 @@ def run_korean() -> dict:
                   f"부채비율={indicators.get('debt_ratio','N/A')}% "
                   f"트렌드={list(trend.keys())} "
                   f"trend_label={stock.get('trend_label','N/A')}")
+        # fetch_dart_metrics로 trend_label / op_growth_pct / operating_margin 보강
+        print("  DART 영업이익 트렌드 수집 중 (fnlttSinglAcnt)...")
+        codes = [s.get("code", "") for s in analyzed]
+        dm = fetch_dart_metrics(codes)
+        for stock in analyzed:
+            m = dm.get(stock.get("code", ""), {})
+            if m:
+                if m.get("trend_label"):
+                    stock["trend_label"] = m["trend_label"]
+                if m.get("op_growth_pct") is not None:
+                    stock["op_growth_pct"] = m["op_growth_pct"]
+                if m.get("op_margin") is not None:
+                    stock["operating_margin"] = str(m["op_margin"])
+                if m.get("debt_ratio") is not None and not stock.get("debt_ratio"):
+                    stock["debt_ratio"] = str(m["debt_ratio"])
+                print(f"    {stock['name']}: trend={stock.get('trend_label')} "
+                      f"op_growth={stock.get('op_growth_pct')} "
+                      f"om={stock.get('operating_margin')}")
     else:
         print("  DART_API_KEY 없음 — yfinance 데이터 사용")
 
