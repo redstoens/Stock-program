@@ -1450,14 +1450,27 @@
             </div>
             <div class="info-item">
               <div class="lbl">실적 트렌드</div>
-              <div class="val">${trendIcon} ${s.earnings_trend || '-'}</div>
+              <div class="val">${s.trend_label ? (() => {
+                const tlColor = s.trend_label === '개선' ? '#276749' : s.trend_label === '악화' ? '#c53030' : '#744210';
+                const tlIcon  = s.trend_label === '개선' ? '▲' : s.trend_label === '악화' ? '▼' : '→';
+                const growthStr = s.op_growth_pct != null ? ` (YoY ${s.op_growth_pct > 0 ? '+' : ''}${s.op_growth_pct}%)` : '';
+                return `<span style="color:${tlColor};font-weight:700">${tlIcon} ${s.trend_label}</span><span style="font-size:0.85em;color:#718096">${growthStr} DART</span>`;
+              })() : `${trendIcon} ${s.earnings_trend || '-'}`}</div>
             </div>
-            ${s.operating_margin && s.operating_margin !== 'N/A' ? `
+            ${s.op_margin_dart != null ? `
+            <div class="info-item">
+              <div class="lbl">영업이익률 (DART)</div>
+              <div class="val">${s.op_margin_dart}%</div>
+            </div>` : s.operating_margin && s.operating_margin !== 'N/A' ? `
             <div class="info-item">
               <div class="lbl">영업이익률 (DART)</div>
               <div class="val">${s.operating_margin}%</div>
             </div>` : ''}
-            ${s.debt_ratio && s.debt_ratio !== 'N/A' ? `
+            ${s.debt_ratio != null ? `
+            <div class="info-item">
+              <div class="lbl">부채비율 (DART)</div>
+              <div class="val" style="color:${s.debt_ratio <= 100 ? '#276749' : s.debt_ratio <= 200 ? '#744210' : '#c53030'};font-weight:600">${s.debt_ratio}% <span style="font-size:0.8em;font-weight:400;color:#718096">${s.debt_ratio <= 100 ? '안전' : s.debt_ratio <= 200 ? '주의' : '위험'}</span></div>
+            </div>` : s.debt_ratio && s.debt_ratio !== 'N/A' ? `
             <div class="info-item">
               <div class="lbl">부채비율 (DART)</div>
               <div class="val">${s.debt_ratio}%</div>

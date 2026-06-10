@@ -224,12 +224,22 @@ def fetch_stock_detail(code: str) -> dict:
 
 def format_for_prompt(stocks: list[dict]) -> str:
     """AI 프롬프트 테이블 문자열."""
-    lines = ["순위 | 종목명 | 종목코드 | 현재가 | 등락률 | 시가총액(억) | PER | ROE(%) | RSI | MA배열 | 52주고가대비"]
-    lines.append("-" * 100)
+    has_dart = any(s.get("trend_label") for s in stocks)
+    header = (
+        "순위 | 종목명 | 종목코드 | 현재가 | 등락률 | 시가총액(억) | PER | ROE(%) "
+        "| RSI | MA배열 | 52주고가대비"
+        + (" | 영업이익트렌드(YoY) | 부채비율(%)" if has_dart else "")
+    )
+    lines = [header, "-" * (120 if has_dart else 100)]
     for s in stocks:
-        lines.append(
+        row = (
             f"{s['rank']} | {s['name']} | {s['code']} | {s['price']} | "
             f"{s['change_rate']} | {s['market_cap']} | {s['per']} | {s['roe']} | "
             f"{s.get('rsi', 'N/A')} | {s.get('ma_signal', 'N/A')} | {s.get('week52_pct_from_high', 'N/A')}"
         )
+        if has_dart:
+            trend = s.get("trend_label", "N/A")
+            debt  = f"{s['debt_ratio']}%" if s.get("debt_ratio") is not None else "N/A"
+            row  += f" | {trend} | {debt}"
+        lines.append(row)
     return "\n".join(lines)

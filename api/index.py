@@ -16,6 +16,7 @@ from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 from news_fetcher import fetch_news_with_sentiment
 from analyzer_single import analyze_single_stock
+from dart_fetcher import fetch_dart_metrics
 
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
@@ -218,6 +219,17 @@ def analyze():
 
         # 1-1. 정량 필터링 — 80개 → 상위 25개로 압축 후 Gemini에 전달
         screened = _pre_screen(stocks_raw, top_n=25)
+
+        # 1-2. DART 재무지표 추가 (영업이익 트렌드·부채비율)
+        dart_data = fetch_dart_metrics([s["code"] for s in screened])
+        for s in screened:
+            d = dart_data.get(s["code"], {})
+            if d:
+                s["trend_label"]   = d.get("trend_label")
+                s["debt_ratio"]    = d.get("debt_ratio")
+                s["op_margin_dart"]= d.get("op_margin")
+                s["op_growth_pct"] = d.get("op_growth_pct")
+
         stock_table = format_for_prompt(screened)
 
         # 2. 이전 리포트 로드
@@ -233,6 +245,14 @@ def analyze():
 
         # 4-1. 기술적 지표 (RSI·MA·MACD·거래량) 계산
         _enrich_technicals(analyzed, market="kr")
+
+        # 4-2. DART 재무지표를 선정 종목에 병합 (카드 표시용)
+        screened_map = {s["code"]: s for s in screened}
+        for stock in analyzed:
+            src = screened_map.get(stock.get("code", ""), {})
+            for key in ("trend_label", "debt_ratio", "op_margin_dart", "op_growth_pct"):
+                if src.get(key) is not None:
+                    stock[key] = src[key]
 
         # 5. 과거 리포트와 비교
         overlaps = compare_with_previous(analyzed, prev_report)
