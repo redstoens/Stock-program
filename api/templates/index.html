@@ -62,6 +62,23 @@
 
     #result-section { display: none; }
     .result-meta { font-size: 0.82rem; color: #a0aec0; margin-bottom: 0.75rem; }
+    /* ── 신뢰 지표 배너 ── */
+    #trust-banner { display:none; background:linear-gradient(135deg,#ebf8ff 0%,#f0fff4 100%); border:1.5px solid #bee3f8; border-radius:12px; padding:0.75rem 1.2rem; margin-bottom:1rem; }
+    .tb-title { font-size:0.78rem; font-weight:700; color:#2b6cb0; margin-bottom:0.5rem; letter-spacing:0.02em; text-transform:uppercase; }
+    .tb-grid { display:flex; flex-wrap:wrap; gap:0.5rem 1.5rem; }
+    .tb-stat { display:flex; flex-direction:column; align-items:center; min-width:64px; }
+    .tb-val { font-size:1.25rem; font-weight:800; line-height:1.1; }
+    .tb-val.pos { color:#276749; }
+    .tb-val.neg { color:#c53030; }
+    .tb-val.neu { color:#2b6cb0; }
+    .tb-lbl { font-size:0.7rem; color:#718096; margin-top:0.15rem; text-align:center; }
+    .tb-divider { width:1px; background:#bee3f8; align-self:stretch; margin:0 0.25rem; }
+    .tb-note { font-size:0.7rem; color:#a0aec0; margin-top:0.45rem; }
+    /* ── 출처 뱃지 ── */
+    .src-badge { display:inline-block; font-size:0.62rem; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle; margin-left:4px; letter-spacing:0.02em; }
+    .src-dart  { background:#e6fffa; color:#276749; border:1px solid #9ae6b4; }
+    .src-live  { background:#ebf8ff; color:#2b6cb0; border:1px solid #90cdf4; }
+    .src-ai    { background:#fffaf0; color:#c05621; border:1px solid #fbd38d; }
 
     /* 날짜별 조회 */
     .date-sel-row { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -680,6 +697,12 @@
 
   <div id="error-box"></div>
 
+  <div id="trust-banner">
+    <div class="tb-title">📊 AI 추천 누적 성과</div>
+    <div class="tb-grid" id="tb-grid-kr"></div>
+    <div class="tb-note" id="tb-note-kr"></div>
+  </div>
+
   <div id="result-section">
     <p class="result-meta" id="result-meta"></p>
     <div id="date-selector-row"></div>
@@ -775,6 +798,7 @@
       };
       document.getElementById('memo').placeholder = placeholders[market];
       loadCachedData();
+      loadTrustStats();
     }
   }
 
@@ -1214,6 +1238,50 @@
     }).join('');
   }
 
+  async function loadTrustStats() {
+    try {
+      const res  = await fetch('/api/trust-stats');
+      const data = await res.json();
+      const kr   = data.kr || {};
+      if (!kr.total) return;
+
+      function statCell(val, lbl, cls) {
+        return `<div class="tb-stat"><div class="tb-val ${cls}">${val}</div><div class="tb-lbl">${lbl}</div></div>`;
+      }
+      const sign = v => v >= 0 ? '+' : '';
+      const cells = [];
+
+      cells.push(statCell(kr.total + '건', '누적 추천', 'neu'));
+      cells.push(`<div class="tb-divider"></div>`);
+
+      if (kr.win_rate_live !== null && kr.win_rate_live !== undefined) {
+        const wCls = kr.win_rate_live >= 60 ? 'pos' : kr.win_rate_live >= 40 ? 'neu' : 'neg';
+        cells.push(statCell(kr.win_rate_live + '%', '진행중 승률', wCls));
+      }
+      if (kr.avg_ret_live !== null && kr.avg_ret_live !== undefined) {
+        const rCls = kr.avg_ret_live >= 0 ? 'pos' : 'neg';
+        cells.push(statCell(sign(kr.avg_ret_live) + kr.avg_ret_live + '%', '진행중 평균', rCls));
+      }
+      if (kr.hit_rate !== null && kr.hit_rate !== undefined) {
+        cells.push(`<div class="tb-divider"></div>`);
+        const hCls = kr.hit_rate >= 50 ? 'pos' : kr.hit_rate >= 30 ? 'neu' : 'neg';
+        cells.push(statCell(kr.hit_rate + '%', '목표가 달성률', hCls));
+      }
+      if (kr.avg_ret_closed !== null && kr.avg_ret_closed !== undefined) {
+        const rCls = kr.avg_ret_closed >= 0 ? 'pos' : 'neg';
+        cells.push(statCell(sign(kr.avg_ret_closed) + kr.avg_ret_closed + '%', '종결 평균수익', rCls));
+      }
+      cells.push(`<div class="tb-divider"></div>`);
+      cells.push(statCell(kr.active + '개', '진행중', 'neu'));
+      cells.push(statCell(kr.closed + '건', '종결', 'neu'));
+
+      document.getElementById('tb-grid-kr').innerHTML = cells.join('');
+      document.getElementById('tb-note-kr').textContent =
+        '※ 진행중 승률·평균수익은 현재가 기준 실시간 집계 | 목표가 달성률은 종결 종목 기준';
+      document.getElementById('trust-banner').style.display = 'block';
+    } catch(e) { /* 조용히 무시 */ }
+  }
+
   async function loadCachedData() {
     const endpoint = currentMarket === 'us' ? '/api/cached-us' : '/api/cached-kr';
     try {
@@ -1449,7 +1517,7 @@
               <div class="val">${s.dividend_yield || '-'}</div>
             </div>
             <div class="info-item">
-              <div class="lbl">실적 트렌드</div>
+              <div class="lbl">실적 트렌드 ${s.trend_label ? '<span class="src-badge src-dart">DART</span>' : '<span class="src-badge src-ai">AI추정</span>'}</div>
               <div class="val">${s.trend_label ? (() => {
                 const tlColor = s.trend_label === '개선' ? '#276749' : s.trend_label === '악화' ? '#c53030' : '#744210';
                 const tlIcon  = s.trend_label === '개선' ? '▲' : s.trend_label === '악화' ? '▼' : '→';
@@ -1485,7 +1553,7 @@
             </div>`;
             })() : ''}
             <div class="info-item" style="grid-column:1/-1">
-              <div class="lbl">외국인·기관 수급</div>
+              <div class="lbl">외국인·기관 수급 ${(s.foreign_trend || '').includes('최근 1개월') ? '<span class="src-badge src-live">실데이터</span>' : '<span class="src-badge src-ai">AI추정</span>'}</div>
               <div class="val">${s.foreign_trend || '-'}</div>
             </div>
             ${s.dividend_history ? `
@@ -1556,7 +1624,7 @@
             ).join('');
 
             return `<div class="tech-section">
-              <div class="section-lbl">기술적 분석</div>
+              <div class="section-lbl">기술적 분석 <span class="src-badge src-live">yfinance 실시간</span></div>
               <div class="rsi-header">
                 <span style="color:#c53030">과매도 ≤30</span>
                 <span>RSI(14) <b>${s.rsi}</b><span class="rsi-badge ${rsiCls}">${s.rsi_signal}</span></span>
@@ -1596,13 +1664,13 @@
 
           <div class="price-grid">
             <div class="price-box target">
-              <div class="plbl">🎯 12개월 목표주가</div>
+              <div class="plbl">🎯 12개월 목표주가 <span class="src-badge src-ai">AI추정</span></div>
               <div class="pval">${s.future_target || '-'}</div>
               <div style="font-size:0.78rem;color:#276749;margin-top:0.2rem;font-weight:600">${s.upside_pct ? '상승여력 ' + s.upside_pct : ''}</div>
               ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${market === 'us' ? '$' + Number(s.current_price_raw).toFixed(2) : Number(s.current_price_raw).toLocaleString() + '원'}</div>` : ''}
             </div>
             <div class="price-box stoploss">
-              <div class="plbl">🛑 손절 기준가</div>
+              <div class="plbl">🛑 손절 기준가 <span class="src-badge src-ai">AI추정</span></div>
               <div class="pval">${s.stop_loss || '-'}</div>
             </div>
           </div>

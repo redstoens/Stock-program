@@ -280,6 +280,38 @@ def analyze():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@app.route("/api/trust-stats")
+def trust_stats():
+    result = {}
+    for market, filename in [("kr", "track_kr.json"), ("us", "track_us.json")]:
+        path = os.path.join(_HERE, "data", filename)
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            records = data.get("records", [])
+            active = [r for r in records if r["status"] == "진행중"]
+            closed = [r for r in records if r["status"] in ("목표달성", "손절", "만료")]
+            hits   = [r for r in closed if r["status"] == "목표달성"]
+
+            live_rets   = [r["current_return_pct"] for r in active  if r.get("current_return_pct") is not None]
+            closed_rets = [r["exit_return_pct"]    for r in closed  if r.get("exit_return_pct")    is not None]
+            all_rets    = live_rets + closed_rets
+
+            result[market] = {
+                "total":          len(records),
+                "active":         len(active),
+                "closed":         len(closed),
+                "hit_rate":       round(len(hits) / len(closed) * 100) if closed else None,
+                "win_rate_live":  round(sum(1 for r in live_rets if r > 0) / len(live_rets) * 100) if live_rets else None,
+                "avg_ret_live":   round(sum(live_rets) / len(live_rets), 1) if live_rets else None,
+                "avg_ret_closed": round(sum(closed_rets) / len(closed_rets), 1) if closed_rets else None,
+                "avg_ret_all":    round(sum(all_rets) / len(all_rets), 1) if all_rets else None,
+            }
+        except Exception:
+            result[market] = {}
+    return jsonify(result)
+
+
 @app.route("/api/fear-greed")
 def fear_greed():
     def _fetch_vix():
