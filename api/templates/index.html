@@ -1546,7 +1546,7 @@
               <div class="rsi-track"><div class="rsi-dot" style="left:${Math.min(100,Math.max(0,rsi))}%"></div></div>
               <div class="tech-badge-row">
                 ${maSig ? `<span class="tech-badge ${maCls}">${maSig === '정배열' ? '📈' : maSig === '역배열' ? '📉' : '➡️'} 이동평균 ${maSig}</span>` : ''}
-                ${s.macd_signal ? `<span class="tech-badge ${macdCls}">MACD ${s.macd_signal}</span>` : ''}
+                ${(s.macd_signal || '').includes('크로스') ? `<span class="tech-badge ${macdCls}">MACD ${s.macd_signal}</span>` : ''}
                 ${ma20Str ? `<span class="tech-badge">${ma20Str}</span>` : ''}
                 ${ma60Str ? `<span class="tech-badge">${ma60Str}</span>` : ''}
                 ${volLabel ? `<span class="tech-badge ${volCls}">${volLabel}</span>` : ''}
