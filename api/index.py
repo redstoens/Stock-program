@@ -20,6 +20,86 @@ from analyzer_single import analyze_single_stock
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
 
+def _enrich_technicals(stocks: list[dict], market: str = "kr") -> None:
+    """RSI·MA·MACD·거래량 신호를 yfinance 3개월 데이터로 계산해 stocks에 in-place 추가."""
+    def _compute(stock: dict) -> None:
+        code = stock.get("code", "")
+        if not code:
+            return
+        symbols = [f"{code}.KS", f"{code}.KQ"] if market == "kr" else [code]
+        hist = None
+        for sym in symbols:
+            try:
+                h = yf.Ticker(sym).history(period="3mo")
+                if not h.empty:
+                    hist = h
+                    break
+            except Exception:
+                continue
+        if hist is None or len(hist) < 5:
+            return
+
+        closes  = hist["Close"]
+        volumes = hist["Volume"]
+        price   = float(closes.iloc[-1])
+        n       = len(closes)
+
+        # MA20 / MA60
+        ma20 = float(closes.tail(20).mean())
+        ma60 = float(closes.tail(60).mean()) if n >= 60 else None
+        stock["ma20"] = round(ma20) if market == "kr" else round(ma20, 2)
+        stock["ma60"] = ((round(ma60) if market == "kr" else round(ma60, 2)) if ma60 else None)
+
+        # MA 배열 신호
+        if ma60:
+            if price > ma20 > ma60:   stock["ma_signal"] = "정배열"
+            elif price < ma20 < ma60: stock["ma_signal"] = "역배열"
+            else:                     stock["ma_signal"] = "혼조"
+        else:
+            stock["ma_signal"] = "단기상승" if price > ma20 else "단기하락"
+
+        # RSI(14)
+        delta = closes.diff().dropna()
+        gain  = delta.clip(lower=0).tail(14).mean()
+        loss  = (-delta.clip(upper=0)).tail(14).mean()
+        rsi   = round(float(100 - (100 / (1 + gain / loss))), 1) if loss > 0 else 50.0
+        stock["rsi"] = rsi
+        stock["rsi_signal"] = "과매수" if rsi >= 70 else "과매도" if rsi <= 30 else "중립"
+
+        # MACD (12/26/9) — 최근 크로스 또는 현재 추세
+        if n >= 26:
+            ema12     = closes.ewm(span=12, adjust=False).mean()
+            ema26     = closes.ewm(span=26, adjust=False).mean()
+            macd_line = ema12 - ema26
+            sig_line  = macd_line.ewm(span=9, adjust=False).mean()
+            prev_diff = float(macd_line.iloc[-2]) - float(sig_line.iloc[-2])
+            curr_diff = float(macd_line.iloc[-1]) - float(sig_line.iloc[-1])
+            if prev_diff < 0 <= curr_diff:
+                stock["macd_signal"] = "골든크로스"
+            elif prev_diff > 0 > curr_diff:
+                stock["macd_signal"] = "데드크로스"
+            elif curr_diff > 0:
+                stock["macd_signal"] = "상승추세"
+            else:
+                stock["macd_signal"] = "하락추세"
+
+        # 거래량 비율 (최근 20일 평균 대비)
+        if n >= 21:
+            avg_vol   = float(volumes.iloc[-21:-1].mean())
+            today_vol = float(volumes.iloc[-1])
+            if avg_vol > 0:
+                ratio = round(today_vol / avg_vol, 1)
+                stock["volume_ratio"] = ratio
+                if ratio >= 3.0:   stock["volume_signal"] = "급증"
+                elif ratio >= 1.5: stock["volume_signal"] = "증가"
+                elif ratio <= 0.3: stock["volume_signal"] = "급감"
+                elif ratio <= 0.7: stock["volume_signal"] = "감소"
+                else:              stock["volume_signal"] = "보통"
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        list(ex.map(_compute, stocks))
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -85,6 +165,9 @@ def analyze():
         for stock in analyzed:
             detail = fetch_stock_detail(stock.get("code", ""))
             stock.update(detail)
+
+        # 4-1. 기술적 지표 (RSI·MA·MACD·거래량) 계산
+        _enrich_technicals(analyzed, market="kr")
 
         # 5. 과거 리포트와 비교
         overlaps = compare_with_previous(analyzed, prev_report)
@@ -358,6 +441,9 @@ def analyze_us():
                 stock.setdefault("week52_high", raw.get("week52_high", ""))
                 stock.setdefault("week52_low", raw.get("week52_low", ""))
                 stock.setdefault("week52_pct_from_high", raw.get("week52_pct_from_high", ""))
+
+        # 기술적 지표 (RSI·MA·MACD·거래량) 계산
+        _enrich_technicals(analyzed, market="us")
 
         report_md = build_report(analyzed, memo)
 

@@ -1489,8 +1489,11 @@
             const maSig = s.ma_signal || '';
             const maCls = maSig === '정배열' ? 'ma-bull' : maSig === '역배열' ? 'ma-bear' : 'ma-mixed';
             const macdCls = (s.macd_signal || '').includes('골든') ? 'macd-golden' : 'macd-dead';
-            const ma20Str = s.ma20 ? `MA20 ${s.ma20}원` : '';
-            const ma60Str = s.ma60 && s.ma60 !== 'N/A' ? `MA60 ${s.ma60}원` : '';
+            const _fmtMa = v => market === 'us'
+              ? `$${Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}`
+              : `${Number(v).toLocaleString('ko-KR')}원`;
+            const ma20Str = s.ma20 ? `MA20 ${_fmtMa(s.ma20)}` : '';
+            const ma60Str = s.ma60 && s.ma60 !== 'N/A' ? `MA60 ${_fmtMa(s.ma60)}` : '';
             // 거래량
             const volRatio = parseFloat(s.volume_ratio || 0);
             const volSig   = s.volume_signal || '';
@@ -1515,8 +1518,8 @@
             else if ((s.macd_signal || '').includes('데드'))
               explains.push(['MACD 데드크로스', 'MACD선이 시그널선을 아래로 돌파. 단기 하락 압력 증가 신호 — 신규 매수 신중']);
             // MA 가격선
-            if (s.ma20) explains.push(['MA20', `최근 20거래일 종가 평균(${s.ma20}). 단기 지지·저항선으로 활용`]);
-            if (s.ma60 && s.ma60 !== 'N/A') explains.push(['MA60', `최근 60거래일 종가 평균(${s.ma60}). 중기 추세 기준선`]);
+            if (s.ma20) explains.push(['MA20', `최근 20거래일 종가 평균(${_fmtMa(s.ma20)}). 단기 지지·저항선으로 활용`]);
+            if (s.ma60 && s.ma60 !== 'N/A') explains.push(['MA60', `최근 60거래일 종가 평균(${_fmtMa(s.ma60)}). 중기 추세 기준선`]);
             // 거래량
             if (volRatio > 0) {
               const volDescMap = {
