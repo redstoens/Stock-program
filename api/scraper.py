@@ -111,7 +111,8 @@ KOSPI_TICKERS = [
 
 def _fetch_one(ticker_sym: str) -> dict | None:
     try:
-        info = yf.Ticker(ticker_sym).info
+        ticker = yf.Ticker(ticker_sym)
+        info = ticker.info
         code = ticker_sym.replace(".KS", "").replace(".KQ", "")
         name = info.get("longName") or info.get("shortName") or code
 
@@ -129,6 +130,32 @@ def _fetch_one(ticker_sym: str) -> dict | None:
         mktcap_억 = market_cap // 100_000_000
         pct_from_high = round((cur_price - w52_high) / w52_high * 100, 1) if w52_high > 0 else 0
 
+        # RSI(14) — 1개월 히스토리
+        rsi_str = "N/A"
+        try:
+            hist = ticker.history(period="1mo")
+            if len(hist) >= 15:
+                closes = hist["Close"]
+                delta = closes.diff().dropna()
+                gain  = delta.clip(lower=0).tail(14).mean()
+                loss  = (-delta.clip(upper=0)).tail(14).mean()
+                if loss > 0:
+                    rsi_str = str(round(float(100 - (100 / (1 + gain / loss))), 1))
+        except Exception:
+            pass
+
+        # MA 배열 신호 — info의 fiftyDayAverage / twoHundredDayAverage 활용 (추가 호출 없음)
+        ma50  = info.get("fiftyDayAverage") or 0
+        ma200 = info.get("twoHundredDayAverage") or 0
+        if ma50 and ma200:
+            if cur_price > ma50 > ma200:   ma_sig = "정배열"
+            elif cur_price < ma50 < ma200: ma_sig = "역배열"
+            else:                          ma_sig = "혼조"
+        elif ma50:
+            ma_sig = "MA위" if cur_price > ma50 else "MA아래"
+        else:
+            ma_sig = "N/A"
+
         return {
             "code": code,
             "name": name,
@@ -142,6 +169,8 @@ def _fetch_one(ticker_sym: str) -> dict | None:
             "week52_high": f"{int(w52_high):,}" if w52_high else "N/A",
             "week52_low": f"{int(w52_low):,}" if w52_low else "N/A",
             "week52_pct_from_high": f"{pct_from_high:+.1f}%" if w52_high else "N/A",
+            "rsi": rsi_str,
+            "ma_signal": ma_sig,
         }
     except Exception:
         return None
@@ -195,11 +224,12 @@ def fetch_stock_detail(code: str) -> dict:
 
 def format_for_prompt(stocks: list[dict]) -> str:
     """AI 프롬프트 테이블 문자열."""
-    lines = ["순위 | 종목명 | 종목코드 | 현재가 | 등락률 | 시가총액(억) | PER | ROE(%)"]
-    lines.append("-" * 80)
+    lines = ["순위 | 종목명 | 종목코드 | 현재가 | 등락률 | 시가총액(억) | PER | ROE(%) | RSI | MA배열 | 52주고가대비"]
+    lines.append("-" * 100)
     for s in stocks:
         lines.append(
             f"{s['rank']} | {s['name']} | {s['code']} | {s['price']} | "
-            f"{s['change_rate']} | {s['market_cap']} | {s['per']} | {s['roe']}"
+            f"{s['change_rate']} | {s['market_cap']} | {s['per']} | {s['roe']} | "
+            f"{s.get('rsi', 'N/A')} | {s.get('ma_signal', 'N/A')} | {s.get('week52_pct_from_high', 'N/A')}"
         )
     return "\n".join(lines)

@@ -32,7 +32,8 @@ SP500_TICKERS = [
 
 def _fetch_one(ticker_sym: str) -> dict | None:
     try:
-        info = yf.Ticker(ticker_sym).info
+        ticker = yf.Ticker(ticker_sym)
+        info = ticker.info
         current = info.get("currentPrice") or info.get("regularMarketPrice") or 0
         week52_high = info.get("fiftyTwoWeekHigh") or 0
         week52_low = info.get("fiftyTwoWeekLow") or 0
@@ -40,11 +41,37 @@ def _fetch_one(ticker_sym: str) -> dict | None:
         pct_from_high = ""
         if week52_high and current:
             pct = round((current - week52_high) / week52_high * 100, 1)
-            pct_from_high = f"{pct}%"
+            pct_from_high = f"{pct:+.1f}%"
 
         per_val = info.get("trailingPE") or info.get("forwardPE")
         roe_val = info.get("returnOnEquity")
         pbr_val = info.get("priceToBook")
+
+        # RSI(14) — 1개월 히스토리
+        rsi_str = "N/A"
+        try:
+            hist = ticker.history(period="1mo")
+            if len(hist) >= 15:
+                closes = hist["Close"]
+                delta = closes.diff().dropna()
+                gain  = delta.clip(lower=0).tail(14).mean()
+                loss  = (-delta.clip(upper=0)).tail(14).mean()
+                if loss > 0:
+                    rsi_str = str(round(float(100 - (100 / (1 + gain / loss))), 1))
+        except Exception:
+            pass
+
+        # MA 배열 신호
+        ma50  = info.get("fiftyDayAverage") or 0
+        ma200 = info.get("twoHundredDayAverage") or 0
+        if ma50 and ma200:
+            if current > ma50 > ma200:   ma_sig = "정배열"
+            elif current < ma50 < ma200: ma_sig = "역배열"
+            else:                        ma_sig = "혼조"
+        elif ma50:
+            ma_sig = "MA위" if current > ma50 else "MA아래"
+        else:
+            ma_sig = "N/A"
 
         return {
             "name": info.get("shortName") or info.get("longName") or ticker_sym,
@@ -58,6 +85,8 @@ def _fetch_one(ticker_sym: str) -> dict | None:
             "week52_high": f"${week52_high:,.2f}" if week52_high else "",
             "week52_low": f"${week52_low:,.2f}" if week52_low else "",
             "week52_pct_from_high": pct_from_high,
+            "rsi": rsi_str,
+            "ma_signal": ma_sig,
         }
     except Exception:
         return None
@@ -76,11 +105,12 @@ def fetch_sp500_stocks(top_n: int = 97) -> list[dict]:
 
 
 def format_for_prompt_us(stocks: list[dict]) -> str:
-    lines = ["종목명 | 티커 | PER | ROE(%) | 시가총액(십억달러) | 섹터 | 현재가"]
+    lines = ["종목명 | 티커 | PER | ROE(%) | 시가총액(십억달러) | 섹터 | 현재가 | RSI | MA배열 | 52주고가대비"]
     for s in stocks:
         cap_b = round(s["market_cap"] / 1e9, 1)
         lines.append(
             f"{s['name']} | {s['code']} | {s['per']} | {s['roe']}"
             f" | ${cap_b}B | {s['sector']} | ${s['current_price_raw']}"
+            f" | {s.get('rsi', 'N/A')} | {s.get('ma_signal', 'N/A')} | {s.get('week52_pct_from_high', 'N/A')}"
         )
     return "\n".join(lines)
