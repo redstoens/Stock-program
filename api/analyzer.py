@@ -82,18 +82,24 @@ def analyze_stocks(stock_table: str, memo: str = "") -> list[dict]:
     memo_section = f"5. 추가 요청: {memo}" if memo else ""
     prompt = PROMPT_TEMPLATE.format(stock_table=stock_table, memo_section=memo_section)
 
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=0.3,
-        ),
-    )
-
-    data = json.loads(response.text)
-    stocks = data.get("stocks", [])
-    if not stocks:
-        raise RuntimeError("AI 분석 결과에서 종목을 찾을 수 없습니다.")
-
-    return stocks[:10]
+    try:
+        response = client.models.generate_content(
+            model=MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
+        data = json.loads(response.text)
+        stocks = data.get("stocks", [])
+        if not stocks:
+            raise RuntimeError("AI 분석 결과에서 종목을 찾을 수 없습니다.")
+        return stocks[:10]
+    except RuntimeError:
+        raise
+    except Exception as e:
+        err_str = str(e)
+        if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "credits" in err_str.lower() or "prepayment" in err_str.lower():
+            raise RuntimeError("AI 분석 서비스를 일시적으로 사용할 수 없습니다. Gemini API 크레딧이 소진되었습니다. Google AI Studio(aistudio.google.com)에서 크레딧을 충전해주세요.")
+        raise RuntimeError(f"AI 분석 중 오류가 발생했습니다: {err_str}")
