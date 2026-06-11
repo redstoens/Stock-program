@@ -76,9 +76,10 @@
     .tb-note { font-size:0.7rem; color:#a0aec0; margin-top:0.45rem; }
     /* ── 출처 뱃지 ── */
     .src-badge { display:inline-block; font-size:0.62rem; font-weight:700; padding:1px 5px; border-radius:4px; vertical-align:middle; margin-left:4px; letter-spacing:0.02em; }
-    .src-dart  { background:#e6fffa; color:#276749; border:1px solid #9ae6b4; }
-    .src-live  { background:#ebf8ff; color:#2b6cb0; border:1px solid #90cdf4; }
-    .src-ai    { background:#fffaf0; color:#c05621; border:1px solid #fbd38d; }
+    .src-dart       { background:#e6fffa; color:#276749; border:1px solid #9ae6b4; }
+    .src-live       { background:#ebf8ff; color:#2b6cb0; border:1px solid #90cdf4; }
+    .src-ai         { background:#fffaf0; color:#c05621; border:1px solid #fbd38d; }
+    .src-consensus  { background:#f0fff4; color:#22543d; border:1px solid #68d391; }
 
     /* 날짜별 조회 */
     .date-sel-row { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -1688,12 +1689,33 @@
           <div class="valuation-box">💡 ${s.valuation}</div>
 
           <div class="price-grid">
-            <div class="price-box target">
-              <div class="plbl">🎯 12개월 목표주가 <span class="src-badge src-ai">AI추정</span></div>
-              <div class="pval">${s.future_target || '-'}</div>
-              <div style="font-size:0.78rem;color:#276749;margin-top:0.2rem;font-weight:600">${s.upside_pct ? '상승여력 ' + s.upside_pct : ''}</div>
-              ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${market === 'us' ? '$' + Number(s.current_price_raw).toFixed(2) : Number(s.current_price_raw).toLocaleString() + '원'}</div>` : ''}
-            </div>
+            ${(() => {
+              if (s.consensus_target) {
+                const up = s.current_price_raw
+                  ? ((s.consensus_target - s.current_price_raw) / s.current_price_raw * 100).toFixed(1)
+                  : null;
+                const upColor = up >= 0 ? '#276749' : '#c53030';
+                const upStr = up !== null
+                  ? `<div style="font-size:0.76rem;color:${upColor};margin-top:0.2rem;font-weight:600">${up >= 0 ? '+' : ''}${up}% 상승여력</div>`
+                  : '';
+                const analystStr = s.analyst_count
+                  ? `<div style="font-size:0.72rem;color:#718096;margin-top:0.25rem">애널리스트 ${s.analyst_count}명 · 매수 ${s.analyst_buy||0} 중립 ${s.analyst_hold||0} 매도 ${s.analyst_sell||0}</div>`
+                  : '';
+                return `<div class="price-box target">
+                  <div class="plbl">🏦 증권사 컨센서스 <span class="src-badge src-consensus">실데이터</span></div>
+                  <div class="pval">${s.consensus_target_str}</div>
+                  ${upStr}
+                  ${analystStr}
+                  <div style="font-size:0.7rem;color:#a0aec0;margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid #c6f6d5">AI 12개월 목표: ${s.future_target||'-'}</div>
+                </div>`;
+              }
+              return `<div class="price-box target">
+                <div class="plbl">🎯 12개월 목표주가 <span class="src-badge src-ai">AI추정</span></div>
+                <div class="pval">${s.future_target || '-'}</div>
+                <div style="font-size:0.78rem;color:#276749;margin-top:0.2rem;font-weight:600">${s.upside_pct ? '상승여력 ' + s.upside_pct : ''}</div>
+                ${s.current_price_raw ? `<div style="font-size:0.76rem;color:#718096;margin-top:0.3rem">현재가 ${market === 'us' ? '$' + Number(s.current_price_raw).toFixed(2) : Number(s.current_price_raw).toLocaleString() + '원'}</div>` : ''}
+              </div>`;
+            })()}
             <div class="price-box stoploss">
               <div class="plbl">🛑 손절 기준가 <span class="src-badge src-ai">AI추정</span></div>
               <div class="pval">${s.stop_loss || '-'}</div>

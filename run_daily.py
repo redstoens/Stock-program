@@ -30,6 +30,7 @@ from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 from dart_fetcher import fetch_dart_metrics, fetch_dart_quarter_metrics
+from consensus_fetcher import fetch_consensus
 
 DART_KEY = os.getenv("DART_API_KEY", "")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -573,6 +574,8 @@ def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") 
         "future_target", "stop_loss",
         "buy_score", "buy_score_label",
         "current_price_raw", "week52_high", "week52_low", "week52_pct_from_high",
+        "consensus_target", "consensus_target_str",
+        "analyst_count", "analyst_buy", "analyst_hold", "analyst_sell",
     }
 
     # 오늘 분석 결과 신규 추가
@@ -913,6 +916,22 @@ def run_korean() -> dict:
         if trend:
             stock["foreign_trend"] = trend
             print(f"    {stock['name']}: {trend}")
+
+    # 증권사 컨센서스 목표주가 (WiseReport)
+    print("  증권사 컨센서스 수집 중...")
+    try:
+        cons_data = fetch_consensus(codes)
+        for stock in analyzed:
+            c = cons_data.get(stock.get("code", ""), {})
+            for key in ("consensus_target", "consensus_target_str",
+                        "analyst_count", "analyst_buy", "analyst_hold", "analyst_sell"):
+                if c.get(key) is not None:
+                    stock[key] = c[key]
+            if c:
+                print(f"    {stock['name']}: 컨센서스 {c.get('consensus_target_str','N/A')} "
+                      f"애널리스트 {c.get('analyst_count','N/A')}명")
+    except Exception as e:
+        print(f"  컨센서스 수집 실패: {e}")
 
     # 종합 매수 점수 계산
     print("  종합 매수 점수 계산 중...")
