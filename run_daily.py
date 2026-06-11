@@ -29,7 +29,7 @@ from analyzer import analyze_stocks
 from analyzer_us import analyze_stocks_us
 from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
-from dart_fetcher import fetch_dart_metrics
+from dart_fetcher import fetch_dart_metrics, fetch_dart_quarter_metrics
 
 DART_KEY = os.getenv("DART_API_KEY", "")
 GEMINI_KEY = os.getenv("GEMINI_API_KEY", "")
@@ -465,23 +465,34 @@ def _fetch_technical_indicators(code: str, market: str = "kr") -> dict:
         return {}
 
 
+def _last_trading_day(days_back: int = 0) -> str:
+    """최근 영업일 반환 (주말 건너뜀)."""
+    from datetime import datetime, timedelta
+    d = datetime.today() - timedelta(days=days_back)
+    # 토(5), 일(6) 이면 금요일로
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d.strftime("%Y%m%d")
+
+
 def _fetch_investor_trend(code: str) -> str:
     """pykrx로 외국인·기관 순매수 추이 조회 (최근 1개월, 국내주 전용)."""
     try:
         from pykrx import stock as pk
-        from datetime import datetime, timedelta
 
-        today = datetime.today()
-        end_dt   = today.strftime("%Y%m%d")
-        start_dt = (today - timedelta(days=30)).strftime("%Y%m%d")
+        end_dt   = _last_trading_day(0)
+        start_dt = _last_trading_day(30)
 
-        df = pk.get_market_trading_value_by_investor(start_dt, end_dt, code, detail=False)
+        df = pk.get_market_trading_value_by_investor(start_dt, end_dt, code)
+
         if df is None or df.empty:
             return ""
 
-        # 컬럼명은 pykrx 버전에 따라 "외국인" 또는 "외국인합계"
-        f_col = next((c for c in df.columns if "외국인" in c), None)
-        i_col = next((c for c in df.columns if "기관" in c), None)
+        # 개인 컬럼 제외, 외국인·기관만 추출 (버전별 컬럼명 대응)
+        f_col = next((c for c in df.columns if "외국인" in c and "개인" not in c), None)
+        i_col = next((c for c in df.columns if c in ("기관합계", "기관") or ("기관" in c and "외국인" not in c and "합계" in c)), None)
+        if i_col is None:
+            i_col = next((c for c in df.columns if "기관" in c and "외국인" not in c), None)
 
         def _fmt(net: int) -> str:
             a = abs(net)
@@ -497,12 +508,34 @@ def _fetch_investor_trend(code: str) -> str:
             if col is None:
                 continue
             net = int(df[col].sum())
-            parts.append(f"{label} {_fmt(net)}")
+            if net != 0:
+                parts.append(f"{label} {_fmt(net)}")
 
         return " / ".join(parts) + " (최근 1개월)" if parts else ""
     except Exception as e:
         print(f"    투자자 동향 실패 ({code}): {e}")
         return ""
+
+
+def _fetch_earnings_date(code: str, market: str = "kr") -> str:
+    """yfinance에서 다음 실적 발표일 조회."""
+    try:
+        sym = f"{code}.KS" if market == "kr" else code
+        for attempt_sym in ([f"{code}.KS", f"{code}.KQ"] if market == "kr" else [sym]):
+            try:
+                cal = yf.Ticker(attempt_sym).calendar
+                if not cal:
+                    continue
+                if isinstance(cal, dict):
+                    dates = cal.get("Earnings Date", [])
+                    if dates:
+                        d = dates[0]
+                        return d.date().isoformat() if hasattr(d, "date") else str(d)[:10]
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return ""
 
 
 def _update_tracking(analyzed: list[dict], track_path: str, market: str = "kr") -> None:
@@ -821,8 +854,28 @@ def run_korean() -> dict:
                 print(f"    {stock['name']}: trend={stock.get('trend_label')} "
                       f"op_growth={stock.get('op_growth_pct')} "
                       f"om={stock.get('operating_margin')}")
+
+        # DART 분기 재무지표
+        print("  DART 분기 실적 수집 중...")
+        qm = fetch_dart_quarter_metrics(codes)
+        for stock in analyzed:
+            q = qm.get(stock.get("code", ""), {})
+            for key in ("quarter_label", "quarter_op_margin", "quarter_debt_ratio"):
+                if q.get(key) is not None:
+                    stock[key] = q[key]
+            if q:
+                print(f"    {stock['name']}: {q.get('quarter_label')} "
+                      f"영업이익률={q.get('quarter_op_margin')}%")
     else:
         print("  DART_API_KEY 없음 — yfinance 데이터 사용")
+
+    # 실적 발표일 수집
+    print("  실적 발표일 수집 중...")
+    for stock in analyzed:
+        ed = _fetch_earnings_date(stock.get("code", ""))
+        if ed:
+            stock["next_earnings"] = ed
+            print(f"    {stock['name']}: {ed}")
 
     # 뉴스 수집
     print("  뉴스 수집 중...")

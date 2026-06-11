@@ -57,8 +57,8 @@ def _load_corp_map() -> dict[str, str]:
         return {}
 
 
-def _fetch_annual(corp_code: str, year: int) -> dict:
-    """사업보고서(11011) 연결재무제표 조회. 없으면 개별재무제표 시도."""
+def _fetch_annual(corp_code: str, year: int, reprt_code: str = "11011") -> dict:
+    """재무제표 단일 조회. reprt_code: 11011=사업보고서, 11013=1Q, 11012=H1, 11014=3Q"""
     api_key = os.getenv("DART_API_KEY", "")
     if not api_key:
         return {}
@@ -71,7 +71,7 @@ def _fetch_annual(corp_code: str, year: int) -> dict:
                     "crtfc_key":  api_key,
                     "corp_code":  corp_code,
                     "bsns_year":  str(year),
-                    "reprt_code": "11011",
+                    "reprt_code": reprt_code,
                     "fs_div":     fs_div,
                 },
                 timeout=8,
@@ -102,6 +102,48 @@ def _fetch_annual(corp_code: str, year: int) -> dict:
         except Exception:
             continue
     return {}
+
+
+def fetch_dart_quarter_metrics(stock_codes: list[str]) -> dict[str, dict]:
+    """
+    최근 분기 영업이익률 조회 (3Q→H1→1Q 순으로 시도).
+    Returns: {code: {quarter_label, quarter_op_margin, quarter_debt_ratio}}
+    """
+    corp_map = _load_corp_map()
+    if not corp_map:
+        return {}
+
+    cur_y   = datetime.now().year
+    prev_y  = cur_y - 1
+    # 가장 최근 분기부터 시도 (전년도 기준)
+    attempts = [
+        (prev_y, "11014", f"{prev_y} 3Q"),
+        (prev_y, "11012", f"{prev_y} 반기"),
+        (prev_y, "11013", f"{prev_y} 1Q"),
+        (cur_y,  "11013", f"{cur_y} 1Q"),
+    ]
+
+    def _qmetrics(code: str) -> tuple[str, dict]:
+        cc = corp_map.get(code)
+        if not cc:
+            return code, {}
+        for year, reprt_code, label in attempts:
+            d = _fetch_annual(cc, year, reprt_code)
+            if not d:
+                continue
+            out: dict = {"quarter_label": label}
+            if d.get("op_profit") is not None and d.get("revenue") and d["revenue"] > 0:
+                out["quarter_op_margin"] = round(d["op_profit"] / d["revenue"] * 100, 1)
+            if d.get("total_debt") and d.get("total_equity") and d["total_equity"] > 0:
+                out["quarter_debt_ratio"] = round(d["total_debt"] / d["total_equity"] * 100, 1)
+            if len(out) > 1:   # quarter_label 외 데이터 있을 때만
+                return code, out
+        return code, {}
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        pairs = list(ex.map(_qmetrics, stock_codes))
+
+    return {code: m for code, m in pairs if m}
 
 
 def fetch_dart_metrics(stock_codes: list[str]) -> dict[str, dict]:

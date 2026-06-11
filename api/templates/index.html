@@ -1556,6 +1556,31 @@
               <div class="lbl">외국인·기관 수급 ${(s.foreign_trend || '').includes('최근 1개월') ? '<span class="src-badge src-live">실데이터</span>' : '<span class="src-badge src-ai">AI추정</span>'}</div>
               <div class="val">${s.foreign_trend || '-'}</div>
             </div>
+            ${s.next_earnings ? `
+            <div class="info-item">
+              <div class="lbl">다음 실적발표 <span class="src-badge src-live">yfinance</span></div>
+              <div class="val">${(() => {
+                const today = new Date(); today.setHours(0,0,0,0);
+                const ed = new Date(s.next_earnings);
+                const diff = Math.round((ed - today) / 86400000);
+                const diffStr = diff > 0 ? `<span style="font-size:0.82em;color:#718096"> (${diff}일 후)</span>`
+                              : diff === 0 ? `<span style="color:#c05621;font-weight:700"> (오늘)</span>` : '';
+                return s.next_earnings + diffStr;
+              })()}</div>
+            </div>` : ''}
+            ${s.quarter_label ? `
+            <div class="info-item">
+              <div class="lbl">최근 분기 영업이익률 <span class="src-badge src-dart">DART</span></div>
+              <div class="val">${(() => {
+                const qom  = s.quarter_op_margin;
+                const aom  = parseFloat(s.op_margin_dart || s.operating_margin || 0);
+                const diff = (qom != null && aom) ? (qom - aom).toFixed(1) : null;
+                const diffStr = diff !== null
+                  ? `<span style="color:${diff>=0?'#276749':'#c53030'};font-size:0.85em;margin-left:4px">${diff>=0?'+':''}${diff}pp vs 연간</span>`
+                  : '';
+                return `${qom != null ? qom + '%' : '-'} <span style="font-size:0.8em;color:#718096">(${s.quarter_label})</span>${diffStr}`;
+              })()}</div>
+            </div>` : ''}
             ${s.dividend_history ? `
             <div class="info-item" style="grid-column:1/-1">
               <div class="lbl">3년 배당 히스토리</div>

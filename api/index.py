@@ -16,7 +16,7 @@ from report import build_report
 from history import save_report, load_previous_report, compare_with_previous
 from news_fetcher import fetch_news_with_sentiment
 from analyzer_single import analyze_single_stock
-from dart_fetcher import fetch_dart_metrics
+from dart_fetcher import fetch_dart_metrics, fetch_dart_quarter_metrics
 
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
@@ -159,6 +159,18 @@ def _enrich_technicals(stocks: list[dict], market: str = "kr") -> None:
                 elif ratio <= 0.7: stock["volume_signal"] = "감소"
                 else:              stock["volume_signal"] = "보통"
 
+        # 다음 실적 발표일
+        try:
+            sym = f"{code}.KS" if market == "kr" else code
+            cal = yf.Ticker(sym).calendar
+            if isinstance(cal, dict):
+                dates = cal.get("Earnings Date", [])
+                if dates:
+                    d = dates[0]
+                    stock["next_earnings"] = d.date().isoformat() if hasattr(d, "date") else str(d)[:10]
+        except Exception:
+            pass
+
     with ThreadPoolExecutor(max_workers=8) as ex:
         list(ex.map(_compute, stocks))
 
@@ -251,13 +263,27 @@ def analyze():
         # 4-1. 기술적 지표 (RSI·MA·MACD·거래량) 계산
         _enrich_technicals(analyzed, market="kr")
 
-        # 4-2. DART 재무지표를 선정 종목에 병합 (카드 표시용)
+        # 4-2. DART 연간 재무지표를 선정 종목에 병합
         screened_map = {s["code"]: s for s in screened}
         for stock in analyzed:
             src = screened_map.get(stock.get("code", ""), {})
             for key in ("trend_label", "debt_ratio", "op_margin_dart", "op_growth_pct"):
                 if src.get(key) is not None:
                     stock[key] = src[key]
+
+        # 4-3. DART 분기 재무지표 (최대 8초)
+        try:
+            with _TPE(max_workers=1) as _ex2:
+                q_data = _ex2.submit(
+                    fetch_dart_quarter_metrics, [s.get("code","") for s in analyzed]
+                ).result(timeout=8)
+            for stock in analyzed:
+                q = q_data.get(stock.get("code", ""), {})
+                for key in ("quarter_label", "quarter_op_margin", "quarter_debt_ratio"):
+                    if q.get(key) is not None:
+                        stock[key] = q[key]
+        except Exception:
+            pass
 
         # 5. 과거 리포트와 비교
         overlaps = compare_with_previous(analyzed, prev_report)
