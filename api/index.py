@@ -17,7 +17,6 @@ from history import save_report, load_previous_report, compare_with_previous
 from news_fetcher import fetch_news_with_sentiment
 from analyzer_single import analyze_single_stock
 from dart_fetcher import fetch_dart_metrics, fetch_dart_quarter_metrics
-from consensus_fetcher import fetch_consensus
 
 app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 
@@ -283,21 +282,6 @@ def analyze():
                 for key in ("quarter_label", "quarter_op_margin", "quarter_debt_ratio"):
                     if q.get(key) is not None:
                         stock[key] = q[key]
-        except Exception:
-            pass
-
-        # 4-4. 증권사 컨센서스 목표주가 (WiseReport, 최대 12초)
-        try:
-            with _TPE(max_workers=1) as _ex3:
-                cons_data = _ex3.submit(
-                    fetch_consensus, [s.get("code", "") for s in analyzed]
-                ).result(timeout=12)
-            for stock in analyzed:
-                c = cons_data.get(stock.get("code", ""), {})
-                for key in ("consensus_target", "consensus_target_str",
-                            "analyst_count", "analyst_buy", "analyst_hold", "analyst_sell"):
-                    if c.get(key) is not None:
-                        stock[key] = c[key]
         except Exception:
             pass
 
